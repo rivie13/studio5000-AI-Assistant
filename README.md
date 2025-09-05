@@ -1,14 +1,26 @@
-# Studio 5000 Logix Designer Documentation MCP Server
+# 🤖 Studio 5000 AI-Powered PLC Programming Assistant
 
-This MCP (Model Context Protocol) server provides seamless access to Studio 5000/Logix Designer instruction documentation within AI conversations. It enables you to search for and retrieve detailed information about PLC instructions, programming syntax, parameters, and best practices directly while coding.
+This revolutionary MCP (Model Context Protocol) server transforms PLC programming by providing AI-powered code generation, L5X project creation, and seamless Studio 5000 integration. Convert natural language specifications directly into working ladder logic and complete Studio 5000 projects!
 
-## Features
+## 🚀 AI-Powered Features
 
-- **Search Instructions**: Find PLC instructions by name, description, or category
+### **🧠 Natural Language to PLC Code**
+- **AI Code Generation**: Convert plain English to working ladder logic
+  - *"Start the motor when the start button is pressed"* → Complete ladder logic
+- **Smart Tag Creation**: Automatically generates appropriate I/O tags
+- **Instruction Validation**: Validates generated code against official Studio 5000 documentation
+
+### **📁 L5X Project Generation**
+- **Complete Project Creation**: Generate full Studio 5000 L5X project files
+- **Multiple Controller Support**: Support for various Allen-Bradley controllers (1756-L83E, etc.)
+- **Ready-to-Import**: Projects can be directly imported into Studio 5000
+
+### **📚 Documentation Access**
+- **Search Instructions**: Find PLC instructions by name, description, or category  
 - **Detailed Information**: Get comprehensive details about instruction syntax, parameters, and usage
 - **Category Browsing**: Browse instructions by functional categories (Alarm, Math, Motion, etc.)
-- **Language Support**: Information about which programming languages support each instruction (Ladder, Function Block, Structured Text)
-- **Real-time Access**: Instant access to documentation without leaving your development environment
+- **Language Support**: Information about which programming languages support each instruction
+- **Real-time Validation**: Instant validation using official Rockwell documentation
 
 ## Installation
 
@@ -45,7 +57,7 @@ Add to your Claude Desktop configuration file (typically found in `%APPDATA%\Cla
     "studio5000-docs": {
       "command": "python",
       "args": [
-        "C:\\Users\\kontr\\Studio5000_MCP_Server\\studio5000_mcp_server.py",
+        "C:\\Users\\kontr\\Studio5000_MCP_Server\\src\\mcp_server\\studio5000_mcp_server.py",
         "--doc-root",
         "C:\\Program Files (x86)\\Rockwell Software\\Studio 5000\\Logix Designer\\ENU\\v36\\Bin\\Help\\ENU\\rs5000"
       ],
@@ -65,56 +77,87 @@ If you're using Cursor IDE, you can configure the MCP server in your workspace s
    - **Name**: Studio 5000 Documentation
    - **Command**: `python C:\Users\kontr\Studio5000_MCP_Server\studio5000_mcp_server.py --doc-root "C:\Program Files (x86)\Rockwell Software\Studio 5000\Logix Designer\ENU\v36\Bin\Help\ENU\rs5000"`
 
-## Available Tools
+## 🛠️ Available AI Tools
 
-Once configured, the following tools will be available in your AI conversations:
+Once configured, these powerful tools will be available in your AI conversations:
 
-### 1. Search Instructions
+### 🧠 **AI Code Generation Tools**
+
+#### 1. Generate Ladder Logic
+**Tool**: `generate_ladder_logic`
+**Parameters**: 
+- `specification` (string): Natural language description of desired PLC behavior
+
+**Example**: *"Create logic to start a motor with a start button and stop it with a stop button"*
+
+#### 2. Create L5X Project  
+**Tool**: `create_l5x_project`
+**Parameters**:
+- `project_spec` (object): Project specification including name, controller type, and logic description
+
+**Example**: Generate a complete Studio 5000 project from a description
+
+#### 3. Validate Ladder Logic
+**Tool**: `validate_ladder_logic`
+**Parameters**:
+- `logic_spec` (object): Ladder logic code and instructions to validate
+
+**Example**: Verify generated code against Studio 5000 documentation
+
+### 📚 **Documentation Tools**
+
+#### 4. Search Instructions
 **Tool**: `search_instructions`
 **Parameters**: 
 - `query` (string): Search term (instruction name, description, etc.)
 - `category` (optional string): Filter by instruction category
 
-**Example**: Search for timer-related instructions
-
-### 2. Get Instruction Details
+#### 5. Get Instruction Details
 **Tool**: `get_instruction`
 **Parameters**:
 - `name` (string): Exact instruction name (e.g., "TON", "MOV", "ADD")
 
-**Example**: Get complete details about the ADD instruction
-
-### 3. List Categories
+#### 6. List Categories  
 **Tool**: `list_categories`
 **Parameters**: None
 
-**Example**: See all available instruction categories
-
-### 4. List Instructions by Category
+#### 7. List Instructions by Category
 **Tool**: `list_instructions_by_category`
 **Parameters**:
 - `category` (string): Category name
 
-**Example**: List all Motion instructions
-
-### 5. Get Instruction Syntax
+#### 8. Get Instruction Syntax
 **Tool**: `get_instruction_syntax`
 **Parameters**:
 - `name` (string): Instruction name
 
-**Example**: Get syntax and parameters for a specific instruction
+## 💡 Usage Examples
 
-## Usage Examples
+Once the MCP server is configured, you can ask questions and generate code like:
 
-Once the MCP server is configured, you can ask questions like:
+### **🧠 AI Code Generation Examples**
+- *"Create ladder logic to start a motor when a start button is pressed and stop it when a stop button is pressed"*
+- *"Generate a conveyor control system with start, stop, and emergency stop"*
+- *"Create a timer-based sequence for a traffic light system"*
+- *"Build ladder logic for a pump control with auto/manual modes"*
 
-- "What instructions are available for timer operations?"
-- "Show me the syntax for the MOV instruction"
-- "What are all the Motion instructions available?"
-- "How do I use the ADD instruction in ladder logic?"
-- "What parameters does the PID instruction require?"
+### **📁 L5X Project Creation Examples** 
+- *"Create a complete Studio 5000 project for motor control with start/stop functionality"*
+- *"Generate an L5X file for a simple conveyor system"*
+- *"Build a complete project for a 3-station assembly line"*
 
-The AI will automatically use the MCP server tools to provide accurate, up-to-date information from your Studio 5000 documentation.
+### **📚 Documentation Examples**
+- *"What instructions are available for timer operations?"*
+- *"Show me the syntax for the MOV instruction"*
+- *"What are all the Motion instructions available?"*
+- *"How do I use the ADD instruction in ladder logic?"*
+- *"What parameters does the PID instruction require?"*
+
+### **🔍 Validation Examples**
+- *"Validate this ladder logic: XIC(START)XIO(STOP)OTE(MOTOR)"*
+- *"Check if my TON instruction usage is correct"*
+
+The AI will automatically use the MCP server tools to provide accurate, up-to-date information and generate working PLC code from your Studio 5000 documentation.
 
 ## Troubleshooting
 
@@ -156,14 +199,25 @@ The MCP server:
 - Provides fast search and retrieval capabilities
 - Follows the Model Context Protocol specification for AI integration
 
-## File Structure
+## 📁 Project Structure
 
 ```
 C:\Users\kontr\Studio5000_MCP_Server\
-├── studio5000_mcp_server.py    # Main MCP server implementation
-├── requirements.txt            # Python dependencies
-├── mcp_config.json            # Sample MCP configuration
-└── README.md                  # This documentation
+├── src/
+│   ├── mcp_server/
+│   │   └── studio5000_mcp_server.py    # Enhanced MCP server with AI features
+│   ├── code_generator/
+│   │   ├── l5x_generator.py            # L5X project file generation
+│   │   └── templates/                  # L5X templates
+│   ├── ai_assistant/
+│   │   └── code_assistant.py           # AI-powered code generation
+│   └── sdk_interface/                  # Future Studio 5000 SDK integration
+├── tests/                              # Test suite
+├── examples/                           # Example projects
+├── docs/                              # Additional documentation
+├── requirements.txt                    # Python dependencies
+├── mcp_config.json                    # Sample MCP configuration
+└── README.md                          # This documentation
 ```
 
 ## Contributing
