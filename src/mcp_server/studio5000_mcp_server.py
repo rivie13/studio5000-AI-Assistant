@@ -23,6 +23,7 @@ from dataclasses import dataclass
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from code_generator.l5x_generator import L5XGenerator, L5XProject, Program, Routine, LadderRung, create_motor_control_example
 from ai_assistant.code_assistant import CodeAssistant
+from sdk_interface.studio5000_sdk import studio5000_sdk
 
 # MCP imports (we'll implement a simplified version)
 class MCPServer:
@@ -247,6 +248,7 @@ class Studio5000MCPServer:
         # Initialize new components
         self.l5x_generator = L5XGenerator()
         self.code_assistant = CodeAssistant(mcp_server=self)
+        self.studio5000_sdk = studio5000_sdk
         
         # Initialize and index the documentation
         self._initialize()
@@ -308,6 +310,12 @@ class Studio5000MCPServer:
             "validate_ladder_logic",
             "Validate ladder logic using Studio 5000 documentation",
             self.validate_ladder_logic
+        )
+        
+        self.server.add_tool(
+            "create_acd_project",
+            "Create real Studio 5000 .ACD project file using official SDK",
+            self.create_acd_project
         )
     
     async def search_instructions(self, query: str, category: Optional[str] = None) -> List[Dict]:
@@ -539,6 +547,39 @@ class Studio5000MCPServer:
                 'error': str(e),
                 'message': 'Validation failed due to internal error'
             }
+    
+    async def create_acd_project(self, project_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Create real Studio 5000 .ACD project file using official SDK"""
+        try:
+            project_name = project_spec.get('name', 'AI_Generated_Project')
+            controller_type = project_spec.get('controller_type', '1756-L83E')
+            major_revision = project_spec.get('major_revision', 36)
+            save_path = project_spec.get('save_path', f'{project_name}.ACD')
+            
+            # Create EMPTY project using SDK - NO PROGRAMS to avoid XPath errors
+            sdk_project_spec = {
+                'name': project_name,
+                'controller_type': controller_type,
+                'major_revision': major_revision,
+                'save_path': save_path
+            }
+            
+            print(f"Creating EMPTY .ACD project with SDK: {sdk_project_spec}", file=sys.stderr)
+            result = await self.studio5000_sdk.create_empty_acd_project(sdk_project_spec)
+            
+            if result['success']:
+                result['message'] = f"🎉 SUCCESS! Created EMPTY .ACD project file that can be opened in Studio 5000!"
+                result['file_type'] = '.ACD'
+                result['sdk_used'] = True
+                
+            return result
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to create .ACD project using Studio 5000 SDK'
+            }
 
 # JSON-RPC 2.0 MCP Protocol Implementation
 async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Optional[Dict]:
@@ -626,6 +667,20 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
                     }
                 }
                 required = ['logic_spec']
+            elif name == 'create_acd_project':
+                properties = {
+                    'project_spec': {
+                        'type': 'object',
+                        'description': 'ACD project specification',
+                        'properties': {
+                            'name': {'type': 'string', 'description': 'Project name'},
+                            'controller_type': {'type': 'string', 'description': 'Controller type (e.g., 1756-L83E)'},
+                            'major_revision': {'type': 'integer', 'description': 'Studio 5000 major revision (default 36)'},
+                            'save_path': {'type': 'string', 'description': 'File path to save .ACD file'}
+                        }
+                    }
+                }
+                required = ['project_spec']
             
             tools.append({
                 'name': name,
