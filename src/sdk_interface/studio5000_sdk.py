@@ -12,8 +12,11 @@ import os
 from typing import Dict, Any, Optional
 from pathlib import Path
 
-# Add Studio 5000 SDK to path
-SDK_PATH = r"C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python"
+# Add Studio 5000 SDK to path - configurable via environment variable
+SDK_PATH = os.environ.get(
+    'STUDIO5000_SDK_PATH',
+    r"C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python"
+)
 if SDK_PATH not in sys.path:
     sys.path.append(SDK_PATH)
 
@@ -29,7 +32,11 @@ class Studio5000SDKInterface:
     
     def __init__(self):
         self.sdk_available = SDK_AVAILABLE
-        self.python312_path = r"C:\Users\kontr\AppData\Local\Programs\Python\Python312\python.exe"
+        # Get Python 3.12 path from environment or use default
+        self.python312_path = os.environ.get(
+            'PYTHON312_PATH',
+            r"C:\Users\kontr\AppData\Local\Programs\Python\Python312\python.exe"
+        )
     
     async def create_empty_acd_project(self, project_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Create an EMPTY .ACD project file using Studio 5000 SDK - NO PROGRAMS ADDED"""

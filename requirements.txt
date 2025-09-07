@@ -1,2 +1,12 @@
+# Core web parsing dependencies
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
+
+# Data handling and async support  
+asyncio>=3.4.3
+
+# XML processing (for L5X generation)
+xml-utils>=1.0.0
+
+# Note: Studio 5000 SDK requires Python 3.12 and is installed separately
+# The SDK is located at: C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python

@@ -743,9 +743,16 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
 async def main():
     """Main server entry point"""
     parser = argparse.ArgumentParser(description='Studio 5000 AI-Powered PLC Programming Assistant MCP Server')
+    
+    # Get default documentation path from environment variable or use fallback
+    default_doc_path = os.environ.get(
+        'STUDIO5000_DOC_PATH', 
+        r'C:\Program Files (x86)\Rockwell Software\Studio 5000\Logix Designer\ENU\v36\Bin\Help\ENU\rs5000'
+    )
+    
     parser.add_argument('--doc-root', 
-                       default='.',
-                       help='Path to Studio 5000 documentation root directory')
+                       default=default_doc_path,
+                       help='Path to Studio 5000 documentation root directory (can also set STUDIO5000_DOC_PATH env var)')
     parser.add_argument('--test', 
                        action='store_true',
                        help='Run in test mode with sample queries')
