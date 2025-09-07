@@ -8,5 +8,11 @@ asyncio>=3.4.3
 # XML processing (for L5X generation)
 xml-utils>=1.0.0
 
+# Vector database and embeddings for SDK documentation search (FIXED VERSIONS)
+torch==2.2.2
+sentence-transformers==2.7.0
+faiss-cpu>=1.7.0
+numpy<2.0.0
+
 # Note: Studio 5000 SDK requires Python 3.12 and is installed separately
 # The SDK is located at: C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python

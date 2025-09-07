@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Vector Database Cache Files (Generated Locally)
+instruction_vector_cache/
+sdk_vector_cache/
+test_sdk_cache/
+*_vector_cache/
+*.pkl
+*.faiss
+
+# Test Files and Generated Projects
+*.ACD
+*.L5X
+*_test_*
+test_*.py
+debug_*.py
+
+# Studio 5000 specific
+*.L5K
+*.RSS
+
+# Log files
+*.log
+logs/

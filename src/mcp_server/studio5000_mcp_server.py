@@ -19,11 +19,14 @@ from bs4 import BeautifulSoup
 import argparse
 from dataclasses import dataclass
 
-# Import our new modules
+# Import our modules
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from code_generator.l5x_generator import L5XGenerator, L5XProject, Program, Routine, LadderRung, create_motor_control_example
 from ai_assistant.code_assistant import CodeAssistant
+from ai_assistant.mcp_integration import create_mcp_integrated_assistant
 from sdk_interface.studio5000_sdk import studio5000_sdk
+from sdk_documentation.mcp_sdk_integration import SDKMCPIntegration, SDKMCPTools
+from documentation.instruction_mcp_integration import InstructionMCPIntegration, InstructionMCPTools
 
 # MCP imports (we'll implement a simplified version)
 class MCPServer:
@@ -248,11 +251,30 @@ class Studio5000MCPServer:
         # Initialize new components
         self.l5x_generator = L5XGenerator()
         self.code_assistant = CodeAssistant(mcp_server=self)
+        self.enhanced_assistant = create_mcp_integrated_assistant(self)
         self.studio5000_sdk = studio5000_sdk
+        
+        # Initialize SDK documentation system
+        self.sdk_integration = SDKMCPIntegration()
+        self.sdk_tools = SDKMCPTools(self.sdk_integration)
+        
+        # Initialize instruction documentation vector database
+        self.instruction_integration = InstructionMCPIntegration()
+        self.instruction_tools = InstructionMCPTools(self.instruction_integration)
         
         # Initialize and index the documentation
         self._initialize()
-        
+    
+    async def _ensure_instruction_db_ready(self):
+        """Ensure the instruction vector database is fully initialized"""
+        if hasattr(self, '_instruction_db_init_task') and self._instruction_db_init_task:
+            try:
+                await self._instruction_db_init_task
+                self._instruction_db_init_task = None  # Clear the task once completed
+            except Exception as e:
+                import sys
+                print(f"Instruction vector database initialization failed: {e}", file=sys.stderr)
+    
     def _initialize(self):
         """Initialize the server with documentation index"""
         # Don't print to stdout - it breaks JSON-RPC protocol
@@ -261,6 +283,28 @@ class Studio5000MCPServer:
         print("Indexing Studio 5000 documentation...", file=sys.stderr)
         self.instructions = self.parser.build_instruction_index()
         print(f"Indexed {len(self.instructions)} instructions", file=sys.stderr)
+        
+        # Initialize instruction vector database asynchronously - schedule for later
+        print("Building instruction vector database...", file=sys.stderr)
+        self._instruction_db_init_task = None
+        try:
+            import asyncio
+            # Check if we're already in an event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in a running loop, create a task for later
+                self._instruction_db_init_task = loop.create_task(
+                    self.instruction_integration.initialize(self.instructions, force_rebuild=False)
+                )
+                print("Instruction vector database initialization scheduled", file=sys.stderr)
+            except RuntimeError:
+                # No running event loop, we can run synchronously
+                asyncio.run(self.instruction_integration.initialize(self.instructions, force_rebuild=False))
+                print("Instruction vector database initialized successfully", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Failed to initialize instruction vector database: {e}", file=sys.stderr)
+            print("Falling back to basic text search", file=sys.stderr)
+            # Continue without vector database - fallbacks will handle this
         
         # Register tools
         self.server.add_tool(
@@ -317,9 +361,73 @@ class Studio5000MCPServer:
             "Create real Studio 5000 .ACD project file using official SDK",
             self.create_acd_project
         )
+        
+        # Add SDK documentation search tools
+        self.server.add_tool(
+            "search_sdk_documentation",
+            "Search Studio 5000 SDK documentation using natural language",
+            self.search_sdk_documentation
+        )
+        
+        self.server.add_tool(
+            "get_sdk_operation_info",
+            "Get detailed information about a specific SDK operation",
+            self.get_sdk_operation_info
+        )
+        
+        self.server.add_tool(
+            "list_sdk_categories", 
+            "List all SDK operation categories",
+            self.list_sdk_categories
+        )
+        
+        self.server.add_tool(
+            "get_sdk_operations_by_category",
+            "Get all SDK operations in a specific category",
+            self.get_sdk_operations_by_category
+        )
+        
+        self.server.add_tool(
+            "get_logix_project_methods",
+            "Get LogixProject methods, optionally filtered by category",
+            self.get_logix_project_methods
+        )
+        
+        self.server.add_tool(
+            "suggest_sdk_operations",
+            "Suggest relevant SDK operations based on context",
+            self.suggest_sdk_operations
+        )
+        
+        self.server.add_tool(
+            "get_sdk_statistics",
+            "Get SDK documentation statistics and overview",
+            self.get_sdk_statistics
+        )
     
     async def search_instructions(self, query: str, category: Optional[str] = None) -> List[Dict]:
-        """Search for instructions matching the query"""
+        """Enhanced search for instructions using vector database"""
+        try:
+            # Ensure vector database is ready
+            await self._ensure_instruction_db_ready()
+            
+            # Use vector database for semantic search
+            vector_results = await self.instruction_tools.search_instructions(query, category)
+            if vector_results.get('success', False):
+                return vector_results.get('results', [])
+            else:
+                # Fallback to basic search if vector search fails
+                import sys
+                print(f"Vector search failed, using fallback: {vector_results.get('error', 'Unknown error')}", file=sys.stderr)
+                return self._basic_search_instructions(query, category)
+        except Exception as e:
+            # Fallback to basic search
+            import sys
+            print(f"Vector search error, using fallback: {e}", file=sys.stderr)
+            return self._basic_search_instructions(query, category)
+    
+    def _basic_search_instructions(self, query: str, category: Optional[str] = None) -> List[Dict]:
+        """Fallback basic search for instructions (original implementation)"""
         results = []
         query_lower = query.lower()
         
@@ -344,7 +452,8 @@ class Studio5000MCPServer:
                     'category': instruction.category,
                     'description': instruction.description,
                     'languages': instruction.languages,
-                    'match_score': match_score
+                    'match_score': match_score,
+                    'search_type': 'basic_fallback'
                 })
         
         # Sort by match score
@@ -352,76 +461,160 @@ class Studio5000MCPServer:
         return results[:20]  # Limit to top 20 results
     
     async def get_instruction(self, name: str) -> Optional[Dict]:
-        """Get detailed information about a specific instruction"""
-        instruction = self.instructions.get(name.upper())
-        if not instruction:
-            return None
-        
-        return {
-            'name': instruction.name,
-            'category': instruction.category,
-            'description': instruction.description,
-            'languages': instruction.languages,
-            'syntax': instruction.syntax,
-            'parameters': instruction.parameters,
-            'examples': instruction.examples,
-            'file_path': instruction.file_path
-        }
+        """Get detailed information about a specific instruction using vector database"""
+        try:
+            # Ensure vector database is ready
+            await self._ensure_instruction_db_ready()
+            
+            # Try vector database first
+            vector_result = await self.instruction_tools.get_instruction(name)
+            if vector_result.get('success', False):
+                return vector_result.get('instruction')
+            
+            # Fallback to direct lookup
+            instruction = self.instructions.get(name.upper())
+            if not instruction:
+                return None
+            
+            return {
+                'name': instruction.name,
+                'category': instruction.category,
+                'description': instruction.description,
+                'languages': instruction.languages,
+                'syntax': instruction.syntax,
+                'parameters': instruction.parameters,
+                'examples': instruction.examples,
+                'file_path': instruction.file_path,
+                'search_type': 'direct_fallback'
+            }
+        except Exception as e:
+            # Fallback to direct lookup
+            instruction = self.instructions.get(name.upper())
+            if not instruction:
+                return None
+            
+            return {
+                'name': instruction.name,
+                'category': instruction.category,
+                'description': instruction.description,
+                'languages': instruction.languages,
+                'syntax': instruction.syntax,
+                'parameters': instruction.parameters,
+                'examples': instruction.examples,
+                'file_path': instruction.file_path,
+                'search_type': 'direct_fallback'
+            }
     
     async def list_categories(self) -> List[str]:
-        """List all available instruction categories"""
-        categories = set()
-        for instruction in self.instructions.values():
-            if instruction.category:
-                categories.add(instruction.category)
-        return sorted(list(categories))
+        """List all available instruction categories using vector database"""
+        try:
+            # Ensure vector database is ready
+            await self._ensure_instruction_db_ready()
+            
+            # Try vector database first
+            vector_result = await self.instruction_tools.list_categories()
+            if vector_result.get('success', False):
+                return vector_result.get('categories', [])
+            
+            # Fallback to direct enumeration
+            categories = set()
+            for instruction in self.instructions.values():
+                if instruction.category:
+                    categories.add(instruction.category)
+            return sorted(list(categories))
+        except Exception as e:
+            # Fallback to direct enumeration
+            categories = set()
+            for instruction in self.instructions.values():
+                if instruction.category:
+                    categories.add(instruction.category)
+            return sorted(list(categories))
     
     async def list_instructions_by_category(self, category: str) -> List[Dict]:
-        """List all instructions in a specific category"""
-        results = []
-        category_lower = category.lower()
-        
-        for instruction in self.instructions.values():
-            if instruction.category.lower() == category_lower:
-                results.append({
-                    'name': instruction.name,
-                    'description': instruction.description,
-                    'languages': instruction.languages
-                })
-        
-        return sorted(results, key=lambda x: x['name'])
+        """List all instructions in a specific category using vector database"""
+        try:
+            # Ensure vector database is ready
+            await self._ensure_instruction_db_ready()
+            
+            # Try vector database first
+            vector_result = await self.instruction_tools.get_instructions_by_category(category)
+            if vector_result.get('success', False):
+                return vector_result.get('instructions', [])
+            
+            # Fallback to direct enumeration
+            results = []
+            category_lower = category.lower()
+            
+            for instruction in self.instructions.values():
+                if instruction.category.lower() == category_lower:
+                    results.append({
+                        'name': instruction.name,
+                        'description': instruction.description,
+                        'languages': instruction.languages,
+                        'search_type': 'direct_fallback'
+                    })
+            
+            return sorted(results, key=lambda x: x['name'])
+        except Exception as e:
+            # Fallback to direct enumeration
+            results = []
+            category_lower = category.lower()
+            
+            for instruction in self.instructions.values():
+                if instruction.category.lower() == category_lower:
+                    results.append({
+                        'name': instruction.name,
+                        'description': instruction.description,
+                        'languages': instruction.languages,
+                        'search_type': 'direct_fallback'
+                    })
+            
+            return sorted(results, key=lambda x: x['name'])
     
     async def get_instruction_syntax(self, name: str) -> Optional[Dict]:
-        """Get syntax and parameter information for an instruction"""
-        instruction = self.instructions.get(name.upper())
-        if not instruction:
-            return None
-        
-        return {
-            'name': instruction.name,
-            'syntax': instruction.syntax,
-            'parameters': instruction.parameters,
-            'languages': instruction.languages
-        }
+        """Get syntax and parameter information for an instruction using vector database"""
+        try:
+            # Ensure vector database is ready
+            await self._ensure_instruction_db_ready()
+            
+            # Try vector database first
+            vector_result = await self.instruction_tools.get_instruction_syntax(name)
+            if vector_result.get('success', False):
+                return vector_result.get('syntax_info')
+            
+            # Fallback to direct lookup
+            instruction = self.instructions.get(name.upper())
+            if not instruction:
+                return None
+            
+            return {
+                'name': instruction.name,
+                'syntax': instruction.syntax,
+                'parameters': instruction.parameters,
+                'languages': instruction.languages,
+                'search_type': 'direct_fallback'
+            }
+        except Exception as e:
+            # Fallback to direct lookup
+            instruction = self.instructions.get(name.upper())
+            if not instruction:
+                return None
+            
+            return {
+                'name': instruction.name,
+                'syntax': instruction.syntax,
+                'parameters': instruction.parameters,
+                'languages': instruction.languages,
+                'search_type': 'direct_fallback'
+            }
     
     # New AI-powered code generation methods
     async def generate_ladder_logic(self, specification: str) -> Dict[str, Any]:
-        """Generate ladder logic from natural language specification"""
+        """Generate enhanced ladder logic from natural language specification"""
         try:
-            result = await self.code_assistant.generate_code_from_description(specification)
-            return {
-                'success': True,
-                'ladder_logic': result['generated_code'].ladder_logic,
-                'tags': result['generated_code'].tags,
-                'instructions_used': result['generated_code'].instructions_used,
-                'comments': result['generated_code'].comments,
-                'validation_notes': result['generated_code'].validation_notes,
-                'requirements_parsed': {
-                    'inputs': result['requirements'].inputs,
-                    'outputs': result['requirements'].outputs,
-                    'logic_type': result['requirements'].logic_type
-                }
-            }
+            # Use the enhanced assistant for better warehouse automation support
+            result = await self.enhanced_assistant.generate_ladder_logic(specification)
+            return result
         except Exception as e:
             return {
                 'success': False,
@@ -430,66 +623,11 @@ class Studio5000MCPServer:
             }
     
     async def create_l5x_project(self, project_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Create complete L5X project file from specification"""
+        """Create complete L5X project file using enhanced code generation"""
         try:
-            project_name = project_spec.get('name', 'GeneratedProject')
-            controller_type = project_spec.get('controller_type', '1756-L83E')
-            description = project_spec.get('description', 'Generated by Studio5000-AI-Assistant')
-            
-            # If specification contains natural language, generate code first
-            if 'specification' in project_spec:
-                code_result = await self.generate_ladder_logic(project_spec['specification'])
-                if not code_result['success']:
-                    return code_result
-                
-                # Create L5X project from generated code
-                rungs = [LadderRung(0, code_result['ladder_logic'], 'Generated logic')]
-                routine = Routine('MainRoutine', 'RLL', rungs, 'Main control routine')
-                program = Program('MainProgram', [routine], 'Main program')
-                
-                project = L5XProject(
-                    name=project_name,
-                    controller_type=controller_type,
-                    programs=[program],
-                    tags=code_result['tags'],
-                    description=description
-                )
-            else:
-                # Use example project for now
-                project = create_motor_control_example()
-                project.name = project_name
-                project.controller_type = controller_type
-                project.description = description
-            
-            # Generate L5X content
-            l5x_content = self.l5x_generator.generate_l5x_project(project)
-            
-            # Save to file if path specified
-            file_path = project_spec.get('save_path')
-            if file_path:
-                success = self.l5x_generator.save_l5x_file(project, file_path)
-                return {
-                    'success': success,
-                    'file_path': file_path if success else None,
-                    'l5x_content': l5x_content[:500] + '...' if len(l5x_content) > 500 else l5x_content,
-                    'project_info': {
-                        'name': project.name,
-                        'controller': project.controller_type,
-                        'programs': len(project.programs),
-                        'tags': len(project.tags) if project.tags else 0
-                    }
-                }
-            else:
-                return {
-                    'success': True,
-                    'l5x_content': l5x_content,
-                    'project_info': {
-                        'name': project.name,
-                        'controller': project.controller_type,
-                        'programs': len(project.programs),
-                        'tags': len(project.tags) if project.tags else 0
-                    }
-                }
+            # Use the enhanced assistant for L5X project creation
+            result = await self.enhanced_assistant.create_l5x_project(project_spec)
+            return result
                 
         except Exception as e:
             return {
@@ -499,79 +637,24 @@ class Studio5000MCPServer:
             }
     
     async def validate_ladder_logic(self, logic_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate ladder logic using Studio 5000 documentation"""
+        """Validate ladder logic using enhanced validation with Studio 5000 documentation"""
         try:
-            ladder_logic = logic_spec.get('ladder_logic', '')
-            instructions_used = logic_spec.get('instructions_used', [])
-            
-            validation_results = []
-            warnings = []
-            errors = []
-            
-            # Validate each instruction against our documentation
-            for instruction in instructions_used:
-                instruction_info = await self.get_instruction(instruction)
-                if instruction_info:
-                    validation_results.append(f"✓ {instruction} - Valid instruction")
-                    
-                    # Check if instruction supports ladder logic
-                    if 'Ladder Diagram' not in instruction_info.get('languages', []):
-                        warnings.append(f"⚠ {instruction} - May not support Ladder Diagram")
-                else:
-                    errors.append(f"✗ {instruction} - Unknown instruction")
-            
-            # Basic syntax validation
-            if ladder_logic:
-                # Check for basic ladder logic syntax patterns
-                if not ladder_logic.strip().endswith(';'):
-                    warnings.append("⚠ Ladder logic should end with semicolon")
-                
-                # Check for balanced parentheses
-                if ladder_logic.count('(') != ladder_logic.count(')'):
-                    errors.append("✗ Unbalanced parentheses in ladder logic")
-            
-            is_valid = len(errors) == 0
-            
-            return {
-                'valid': is_valid,
-                'validation_results': validation_results,
-                'warnings': warnings,
-                'errors': errors,
-                'instructions_validated': len(instructions_used),
-                'summary': f"Validated {len(instructions_used)} instructions - {'PASS' if is_valid else 'FAIL'}"
-            }
+            # Use the enhanced assistant for comprehensive validation
+            result = await self.enhanced_assistant.validate_ladder_logic(logic_spec)
+            return result
             
         except Exception as e:
             return {
                 'valid': False,
                 'error': str(e),
-                'message': 'Validation failed due to internal error'
+                'message': 'Failed to validate ladder logic'
             }
     
     async def create_acd_project(self, project_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Create real Studio 5000 .ACD project file using official SDK"""
+        """Create real Studio 5000 .ACD project file using enhanced assistant and official SDK"""
         try:
-            project_name = project_spec.get('name', 'AI_Generated_Project')
-            controller_type = project_spec.get('controller_type', '1756-L83E')
-            major_revision = project_spec.get('major_revision', 36)
-            save_path = project_spec.get('save_path', f'{project_name}.ACD')
-            
-            # Create EMPTY project using SDK - NO PROGRAMS to avoid XPath errors
-            sdk_project_spec = {
-                'name': project_name,
-                'controller_type': controller_type,
-                'major_revision': major_revision,
-                'save_path': save_path
-            }
-            
-            print(f"Creating EMPTY .ACD project with SDK: {sdk_project_spec}", file=sys.stderr)
-            result = await self.studio5000_sdk.create_empty_acd_project(sdk_project_spec)
-            
-            if result['success']:
-                result['message'] = f"🎉 SUCCESS! Created EMPTY .ACD project file that can be opened in Studio 5000!"
-                result['file_type'] = '.ACD'
-                result['sdk_used'] = True
-                
+            # Use the enhanced assistant for ACD project creation
+            result = await self.enhanced_assistant.create_acd_project(project_spec)
             return result
             
         except Exception as e:
@@ -579,6 +662,96 @@ class Studio5000MCPServer:
                 'success': False,
                 'error': str(e),
                 'message': 'Failed to create .ACD project using Studio 5000 SDK'
+            }
+    
+    # New SDK Documentation Search Methods
+    async def search_sdk_documentation(self, query: str, limit: Optional[int] = 10) -> Dict[str, Any]:
+        """Search Studio 5000 SDK documentation using natural language"""
+        try:
+            result = await self.sdk_tools.search_sdk_documentation(query, limit)
+            return result
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'query': query,
+                'message': 'Failed to search SDK documentation'
+            }
+    
+    async def get_sdk_operation_info(self, name: str, operation_type: Optional[str] = None) -> Dict[str, Any]:
+        """Get detailed information about a specific SDK operation"""
+        try:
+            result = await self.sdk_tools.get_sdk_operation_info(name, operation_type)
+            return result
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'name': name,
+                'message': 'Failed to get SDK operation info'
+            }
+    
+    async def list_sdk_categories(self) -> Dict[str, Any]:
+        """List all SDK operation categories"""
+        try:
+            result = await self.sdk_tools.list_sdk_categories()
+            return result
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to list SDK categories'
+            }
+    
+    async def get_sdk_operations_by_category(self, category: str) -> Dict[str, Any]:
+        """Get all SDK operations in a specific category"""
+        try:
+            result = await self.sdk_tools.get_sdk_operations_by_category(category)
+            return result
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'category': category,
+                'message': 'Failed to get SDK operations by category'
+            }
+    
+    async def get_logix_project_methods(self, method_category: Optional[str] = None) -> Dict[str, Any]:
+        """Get LogixProject methods, optionally filtered by category"""
+        try:
+            result = await self.sdk_tools.get_logix_project_methods(method_category)
+            return result
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'method_category': method_category,
+                'message': 'Failed to get LogixProject methods'
+            }
+    
+    async def suggest_sdk_operations(self, context: str) -> Dict[str, Any]:
+        """Suggest relevant SDK operations based on context"""
+        try:
+            result = await self.sdk_tools.suggest_sdk_operations(context)
+            return result
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'context': context,
+                'message': 'Failed to suggest SDK operations'
+            }
+    
+    async def get_sdk_statistics(self) -> Dict[str, Any]:
+        """Get SDK documentation statistics and overview"""
+        try:
+            result = await self.sdk_tools.get_sdk_statistics()
+            return result
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to get SDK statistics'
             }
 
 # JSON-RPC 2.0 MCP Protocol Implementation
@@ -681,6 +854,39 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
                     }
                 }
                 required = ['project_spec']
+            elif name == 'search_sdk_documentation':
+                properties = {
+                    'query': {'type': 'string', 'description': 'Natural language query to search SDK documentation'},
+                    'limit': {'type': 'integer', 'description': 'Maximum number of results to return (default: 10)'}
+                }
+                required = ['query']
+            elif name == 'get_sdk_operation_info':
+                properties = {
+                    'name': {'type': 'string', 'description': 'Name of the SDK operation to get details for'},
+                    'operation_type': {'type': 'string', 'description': 'Optional operation type filter (method, class, enum, example)'}
+                }
+                required = ['name']
+            elif name == 'list_sdk_categories':
+                properties = {}
+                required = []
+            elif name == 'get_sdk_operations_by_category':
+                properties = {
+                    'category': {'type': 'string', 'description': 'SDK operation category name'}
+                }
+                required = ['category']
+            elif name == 'get_logix_project_methods':
+                properties = {
+                    'method_category': {'type': 'string', 'description': 'Optional category to filter LogixProject methods by'}
+                }
+                required = []
+            elif name == 'suggest_sdk_operations':
+                properties = {
+                    'context': {'type': 'string', 'description': 'Context or description of what you want to accomplish'}
+                }
+                required = ['context']
+            elif name == 'get_sdk_statistics':
+                properties = {}
+                required = []
             
             tools.append({
                 'name': name,

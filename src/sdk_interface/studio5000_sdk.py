@@ -21,7 +21,7 @@ if SDK_PATH not in sys.path:
     sys.path.append(SDK_PATH)
 
 try:
-    from logix_designer_sdk import LogixProject, StdOutEventLogger
+    from logix_designer_sdk import LogixProject, StdOutEventLogger, ImportCollisionOptions
     SDK_AVAILABLE = True
 except ImportError as e:
     print(f"Studio 5000 SDK not available: {e}", file=sys.stderr)
@@ -101,6 +101,210 @@ class Studio5000SDKInterface:
                 'error': str(e),
                 'message': 'Failed to create empty .ACD project using Studio 5000 SDK'
             }
+    
+    async def create_acd_project_with_programs(self, project_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Create .ACD project file WITH MainProgram and MainTask using SDK partial import"""
+        try:
+            if not self.sdk_available:
+                return {
+                    'success': False,
+                    'error': 'Studio 5000 SDK not available',
+                    'message': 'Please ensure Studio 5000 SDK is properly installed'
+                }
+            
+            # Extract project parameters
+            project_name = project_spec.get('name', 'AI_Generated_Project')
+            controller_type = project_spec.get('controller_type', '1756-L83E')
+            major_revision = project_spec.get('major_revision', 36)
+            save_path = project_spec.get('save_path', f'{project_name}.ACD')
+            
+            # Ensure .ACD extension
+            if not save_path.endswith('.ACD'):
+                save_path += '.ACD'
+            
+            # Create full path
+            if not os.path.isabs(save_path):
+                save_path = os.path.join(os.getcwd(), save_path)
+            
+            print(f"Creating EMPTY .ACD project: {save_path}", file=sys.stderr)
+            print(f"Controller: {controller_type}, Revision: {major_revision}", file=sys.stderr)
+            
+            # Create the project using Studio 5000 SDK - EMPTY PROJECT ONLY
+            project = await LogixProject.create_new_project(
+                save_path,
+                major_revision,
+                controller_type,
+                project_name,
+                StdOutEventLogger(),
+            )
+            
+            # DON'T ADD ANYTHING - JUST CLOSE THE PROJECT
+            # This creates a clean, empty Studio 5000 project
+            
+            # Get project info
+            project_info = {
+                'name': project_name,
+                'controller_type': controller_type,
+                'major_revision': major_revision,
+                'file_path': save_path,
+                'file_exists': os.path.exists(save_path),
+                'file_size': os.path.getsize(save_path) if os.path.exists(save_path) else 0
+            }
+            
+            return {
+                'success': True,
+                'project_info': project_info,
+                'message': f'🎉 SUCCESS! Created EMPTY .ACD project file: {save_path}',
+                'sdk_used': True,
+                'project_type': 'Empty Studio 5000 Project'
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to create empty .ACD project using Studio 5000 SDK'
+            }
+    
+    async def create_acd_project_with_programs(self, project_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Create .ACD project file WITH MainProgram and MainTask using SDK partial import"""
+        try:
+            if not self.sdk_available:
+                return {
+                    'success': False,
+                    'error': 'Studio 5000 SDK not available',
+                    'message': 'Please ensure Studio 5000 SDK is properly installed'
+                }
+            
+            # Extract project parameters
+            project_name = project_spec.get('name', 'AI_Generated_Project')
+            controller_type = project_spec.get('controller_type', '1756-L83E')
+            major_revision = project_spec.get('major_revision', 36)
+            save_path = project_spec.get('save_path', f'{project_name}.ACD')
+            ladder_logic = project_spec.get('ladder_logic', '')
+            
+            # Ensure .ACD extension
+            if not save_path.endswith('.ACD'):
+                save_path += '.ACD'
+            
+            # Create full path
+            if not os.path.isabs(save_path):
+                save_path = os.path.join(os.getcwd(), save_path)
+            
+            print(f"Creating ACD project WITH programs: {save_path}", file=sys.stderr)
+            print(f"Controller: {controller_type}, Revision: {major_revision}", file=sys.stderr)
+            
+            # Step 1: Create empty project
+            project = await LogixProject.create_new_project(
+                save_path,
+                major_revision,
+                controller_type,
+                project_name,
+                StdOutEventLogger(),
+            )
+            
+            # Step 2: Generate MainProgram L5X XML
+            main_program_xml = self._generate_main_program_l5x(project_name, ladder_logic)
+            temp_l5x_path = save_path.replace('.ACD', '_MainProgram.L5X')
+            
+            # Save L5X to temporary file
+            with open(temp_l5x_path, 'w', encoding='utf-8') as f:
+                f.write(main_program_xml)
+            
+            # Step 3: Import MainProgram from L5X into ACD
+            await project.partial_import_from_xml_file(
+                "Controller/Programs/Program[@Name='MainProgram']",
+                temp_l5x_path,
+                ImportCollisionOptions.OVERWRITE_ON_COLL
+            )
+            
+            # Step 4: Import MainTask from L5X into ACD  
+            await project.partial_import_from_xml_file(
+                "Controller/Tasks/Task[@Name='MainTask']",
+                temp_l5x_path,
+                ImportCollisionOptions.OVERWRITE_ON_COLL
+            )
+            
+            # Step 5: Save the project
+            await project.save()
+            
+            # Clean up temporary L5X file
+            if os.path.exists(temp_l5x_path):
+                os.remove(temp_l5x_path)
+            
+            # Get project info
+            project_info = {
+                'name': project_name,
+                'controller_type': controller_type,
+                'major_revision': major_revision,
+                'file_path': save_path,
+                'file_exists': os.path.exists(save_path),
+                'file_size': os.path.getsize(save_path) if os.path.exists(save_path) else 0,
+                'has_main_program': True,
+                'has_main_task': True
+            }
+            
+            return {
+                'success': True,
+                'project_info': project_info,
+                'message': f'🎉 SUCCESS! Created ACD project WITH MainProgram and MainTask: {save_path}',
+                'sdk_used': True,
+                'project_type': 'Complete Studio 5000 Project with Programs',
+                'ladder_logic_included': bool(ladder_logic)
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to create ACD project with programs using Studio 5000 SDK'
+            }
+    
+    def _generate_main_program_l5x(self, project_name: str, ladder_logic: str = '') -> str:
+        """Generate L5X XML for MainProgram with MainTask and optional ladder logic"""
+        
+        # Basic ladder logic if none provided
+        if not ladder_logic:
+            ladder_logic = '''<Rung Number="0" Type="N">
+    <Comment>
+        <![CDATA[AI Generated MainRoutine - Add your logic here]]>
+    </Comment>
+    <Text>
+        <![CDATA[NOP();]]>
+    </Text>
+</Rung>'''
+        
+        # Generate L5X XML with MainProgram and MainTask
+        l5x_template = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RSLogix5000Content SchemaRevision="1.0" SoftwareRevision="36.00" TargetName="{project_name}" TargetType="Controller" TargetRevision="1.0" TargetLastEdited="2024-01-01T00:00:00.000Z" ContainsContext="true" Owner="AI Assistant" ExportDate="Tue Jan 01 00:00:00 2024" ExportOptions="References NoRawData L5KData DecoratedData Context Dependencies ForceProtectedEncoding AllProjDocTrans">
+
+    <Controller Use="Context">
+        <!-- MainTask Definition -->
+        <Tasks>
+            <Task Name="MainTask" Type="CONTINUOUS" Priority="10" Watchdog="500" DisableUpdateOutputs="false" InhibitTask="false">
+                <ScheduledPrograms>
+                    <ScheduledProgram Name="MainProgram"/>
+                </ScheduledPrograms>
+            </Task>
+        </Tasks>
+        
+        <!-- MainProgram Definition -->
+        <Programs>
+            <Program Name="MainProgram" TestEdits="false" MainRoutineName="MainRoutine" Disabled="false">
+                <Tags/>
+                <Routines>
+                    <Routine Name="MainRoutine" Type="RLL">
+                        <RLLContent>
+                            {ladder_logic}
+                        </RLLContent>
+                    </Routine>
+                </Routines>
+            </Program>
+        </Programs>
+    </Controller>
+</RSLogix5000Content>'''
+        
+        return l5x_template
 
 # Create global instance - handle import failures gracefully
 try:
