@@ -1073,11 +1073,20 @@ async def main():
             'specification': test_spec
         }
         l5x_result = await mcp_server.create_l5x_project(project_spec)
-        if l5x_result['success']:
-            print(f"  Project created: {l5x_result['project_info']['name']}")
-            print(f"  Controller: {l5x_result['project_info']['controller']}")
-            print(f"  Programs: {l5x_result['project_info']['programs']}")
-            print(f"  Tags: {l5x_result['project_info']['tags']}")
+        if l5x_result.get('success'):
+            print(f"  L5X Project Creation Success!")
+            # Print actual keys to see the structure
+            print(f"  Available keys: {list(l5x_result.keys())}")
+            if 'project_info' in l5x_result:
+                info = l5x_result['project_info']
+                print(f"  Project: {info.get('name', 'N/A')}")
+                print(f"  Controller: {info.get('controller', 'N/A')}")
+                print(f"  Programs: {info.get('programs', 'N/A')}")
+                print(f"  Tags: {info.get('tags', 'N/A')}")
+            elif 'project_name' in l5x_result:
+                print(f"  Project: {l5x_result['project_name']}")
+            elif 'name' in l5x_result:
+                print(f"  Project: {l5x_result['name']}")
         else:
             print(f"  Error: {l5x_result.get('error', 'Unknown error')}")
 

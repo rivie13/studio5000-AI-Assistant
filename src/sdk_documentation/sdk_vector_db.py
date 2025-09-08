@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 import logging
-from sentence_transformers import SentenceTransformer
+# sentence_transformers import moved to lazy load in initialize_model()
 import faiss
 import time
 
@@ -56,6 +56,7 @@ class SDKVectorDatabase:
             logger.info("Loading sentence transformer model...")
             try:
                 # Use a model optimized for semantic search
+                from sentence_transformers import SentenceTransformer
                 self.model = SentenceTransformer('all-MiniLM-L6-v2')
                 logger.info("Model loaded successfully")
             except Exception as e:

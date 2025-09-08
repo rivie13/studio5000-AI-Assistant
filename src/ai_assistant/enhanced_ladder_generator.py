@@ -15,6 +15,7 @@ from .enhanced_code_assistant import (
     AutomationSequence, LogicComplexity, IndustryDomain
 )
 from .warehouse_automation_patterns import WarehouseAutomationPatterns, WarehousePattern
+from .code_assistant import CodeAssistant, PLCRequirement
 
 class EnhancedLadderLogicGenerator:
     """Advanced ladder logic generator for warehouse automation"""
@@ -291,24 +292,30 @@ class EnhancedLadderLogicGenerator:
         tags = []
         instructions_used = []
         
-        # Generate basic I/O logic
-        if requirements.components:
-            inputs = [comp for comp in requirements.components if comp.component_type in ['sensor', 'button', 'switch']]
-            outputs = [comp for comp in requirements.components if comp.component_type in ['motor', 'valve', 'actuator']]
+        # Use the basic code assistant for general-purpose logic generation
+        if requirements.components or requirements.description:
+            # Convert enhanced requirements to basic format
+            basic_assistant = CodeAssistant(self.mcp_server)
             
-            if inputs and outputs:
-                input_tag = inputs[0].name
-                output_tag = outputs[0].name
-                
-                logic_lines.append(f"// Basic Input/Output Control")
-                logic_lines.append(f"XIC({input_tag}) OTE({output_tag});")
-                
-                tags.extend([
-                    {'name': input_tag, 'data_type': 'BOOL', 'description': f'{inputs[0].component_type} input'},
-                    {'name': output_tag, 'data_type': 'BOOL', 'description': f'{outputs[0].component_type} output'}
-                ])
-                
-                instructions_used.extend(['XIC', 'OTE'])
+            # Create a basic PLCRequirement from the enhanced one
+            basic_req = PLCRequirement(
+                description=requirements.description,
+                inputs=[comp.name for comp in requirements.components if self._is_input_component(comp)],
+                outputs=[comp.name for comp in requirements.components if self._is_output_component(comp)],
+                logic_type=requirements.logic_type,
+                conditions=[],  # Extract from description if needed
+                actions=[]      # Extract from description if needed
+            )
+            
+            # Use basic assistant's generator
+            from .code_assistant import LadderLogicGenerator
+            basic_generator = LadderLogicGenerator()
+            basic_result = basic_generator.generate_from_requirements(basic_req)
+            
+            # Convert back to enhanced format
+            logic_lines = [basic_result.ladder_logic] if basic_result.ladder_logic else []
+            tags = basic_result.tags
+            instructions_used = basic_result.instructions_used
         
         # Add complexity-based enhancements
         if requirements.complexity in [LogicComplexity.COMPLEX, LogicComplexity.ADVANCED]:
@@ -466,4 +473,24 @@ class EnhancedLadderLogicGenerator:
                 doc_lines.append(f"- {key}: {value}")
         
         return "\n".join(doc_lines)
+    
+    def _get_or_create_tag(self, available_tags: List[str], keywords: List[str], default: str) -> str:
+        """Find best matching tag from extracted components or create default"""
+        for tag in available_tags:
+            for keyword in keywords:
+                if keyword.upper() in tag.upper():
+                    return tag
+        return default
+    
+    def _is_input_component(self, component: IndustrialComponent) -> bool:
+        """Determine if a component is an input type"""
+        input_types = ['button', 'switch', 'sensor', 'input', 'signal', 'detector', 'photoeye', 
+                      'photoelectric', 'proximity', 'limit_switch', 'pressure', 'temperature']
+        return component.component_type in input_types
+    
+    def _is_output_component(self, component: IndustrialComponent) -> bool:
+        """Determine if a component is an output type"""
+        output_types = ['motor', 'light', 'valve', 'cylinder', 'actuator', 'relay', 'contactor', 
+                       'solenoid', 'output', 'alarm', 'horn', 'beacon', 'servo_motor', 'stepper_motor']
+        return component.component_type in output_types
 

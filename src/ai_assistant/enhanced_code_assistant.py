@@ -88,11 +88,13 @@ class IndustrialNLPParser:
         # Warehouse-specific components
         self.warehouse_components = {
             'conveyors': ['conveyor', 'belt', 'roller', 'chain conveyor', 'belt conveyor', 'accumulation conveyor'],
-            'sensors': ['photoeye', 'photoelectric', 'proximity', 'ultrasonic', 'laser scanner', 'barcode scanner', 
-                       'weight scale', 'load cell', 'encoder', 'resolver', 'limit switch'],
-            'actuators': ['pusher', 'diverter', 'gate', 'stop blade', 'lift table', 'transfer unit', 
+            'sensors': ['button', 'switch', 'sensor', 'input', 'signal', 'detector', 'photoeye', 'photoelectric', 'proximity', 'ultrasonic', 
+                       'laser scanner', 'barcode scanner', 'weight scale', 'load cell', 'encoder', 'resolver', 'limit switch', 
+                       'pressure', 'temperature'],
+            'actuators': ['actuator', 'valve', 'cylinder', 'relay', 'contactor', 'solenoid', 'light', 'alarm', 'horn', 'beacon', 'output',
+                         'pusher', 'diverter', 'gate', 'stop blade', 'lift table', 'transfer unit', 
                          'sorter', 'picker', 'robot arm', 'gripper'],
-            'motors': ['servo motor', 'stepper motor', 'VFD', 'variable frequency drive', 'AC motor', 'DC motor'],
+            'motors': ['motor', 'servo motor', 'stepper motor', 'VFD', 'variable frequency drive', 'AC motor', 'DC motor'],
             'safety': ['light curtain', 'safety mat', 'e-stop', 'emergency stop', 'safety relay', 'guard switch',
                       'safety scanner', 'safety PLC', 'lockout', 'tagout'],
             'material_handling': ['crane', 'hoist', 'lift', 'elevator', 'shuttle', 'AGV', 'automated guided vehicle',
@@ -110,7 +112,9 @@ class IndustrialNLPParser:
         self.process_terms = {
             'control_modes': ['manual', 'automatic', 'semi-automatic', 'maintenance', 'setup'],
             'states': ['idle', 'running', 'stopped', 'fault', 'alarm', 'warning', 'ready', 'busy'],
-            'operations': ['start', 'stop', 'pause', 'resume', 'reset', 'abort', 'home', 'initialize']
+            'operations': ['start', 'stop', 'pause', 'resume', 'reset', 'abort', 'home', 'initialize',
+                          'turn on', 'turn off', 'activate', 'deactivate', 'energize', 'de-energize', 
+                          'open', 'close', 'move', 'run']
         }
         
         # Timing and sequencing
@@ -257,24 +261,31 @@ class IndustrialNLPParser:
         for category, component_list in self.warehouse_components.items():
             for component_name in component_list:
                 if component_name in text:
-                    # Extract specific instance names if possible
-                    pattern = rf'(\w+\s+)?{re.escape(component_name)}(\s+\w+)?'
-                    matches = re.finditer(pattern, text)
+                    # Count occurrences
+                    count = text.count(component_name)
                     
-                    for match in matches:
-                        full_name = match.group(0).strip()
+                    # Create components with simple incremental names
+                    for i in range(count):
+                        # Generate a simple name based on component type
+                        if count > 1:
+                            name = f"{component_name.upper().replace(' ', '_')}_{i+1}"
+                        else:
+                            name = component_name.upper().replace(' ', '_')
                         
                         # Determine if safety critical
                         safety_critical = any(safety_word in text for safety_word in self.safety_keywords['emergency'] + 
                                             self.safety_keywords['protection'])
                         
                         component = IndustrialComponent(
-                            name=full_name.replace(' ', '_').upper(),
-                            component_type=category.rstrip('s'),  # Remove plural 's'
+                            name=name,
+                            component_type=component_name,  # Keep original component type
                             safety_critical=safety_critical
                         )
                         
                         components.append(component)
+                        
+                        # Only create one component per type for now to avoid duplicates
+                        break
         
         return components
     
@@ -366,9 +377,9 @@ class IndustrialNLPParser:
     def _determine_logic_type(self, text: str, complexity: LogicComplexity) -> str:
         """Determine the most appropriate logic type"""
         
-        if "structured text" in text or "st" in text:
+        if "structured text" in text or " st " in text:
             return "structured_text"
-        elif "function block" in text or "fb" in text:
+        elif "function block" in text or " fb " in text:
             return "function_block"
         elif complexity in [LogicComplexity.COMPLEX, LogicComplexity.ADVANCED]:
             return "mixed"  # Use combination of ladder and ST
