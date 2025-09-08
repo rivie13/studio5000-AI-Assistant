@@ -2,6 +2,63 @@
 
 This revolutionary MCP (Model Context Protocol) server transforms PLC programming by providing AI-powered code generation, L5X project creation, real .ACD file generation, and seamless Studio 5000 integration. Convert natural language specifications directly into working ladder logic and complete Studio 5000 projects!
 
+## ⚡ **TL;DR - For Impatient Teammates**
+```bash
+# 1. Get Python 3.12 (NOT 3.11!) from python.org
+python --version  # Must show 3.12.x
+
+# 2. Clone and install
+git clone <repository-url>
+cd Studio5000_MCP_Server
+pip install -r requirements.txt
+
+# 3. Install SDK (CRITICAL for .ACD files!)
+pip install "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\logix_designer_sdk-*-py3-none-any.whl"
+
+# 4. Test it works
+python src/mcp_server/studio5000_mcp_server.py --test
+```
+**That's it!** ✅ Skip to [Claude Desktop setup](#configuration-for-claude-desktop) if tests pass.
+
+## 🚀 **Quick Start for Teammates**
+
+**Ready to use this tool? Follow these steps:**
+
+### **Prerequisites** ⚠️ CRITICAL
+- **Python 3.12** (NOT 3.11 or earlier - the SDK will not work!)
+- **Studio 5000 Logix Designer v36 or later** installed on your machine
+- **Windows Operating System** (Studio 5000 SDK is Windows-only)
+
+### **Installation Steps**
+
+1. **Verify Python 3.12**:
+   ```bash
+   python --version
+   # Must show Python 3.12.x - if not, install Python 3.12 from python.org
+   ```
+
+2. **Clone and Install**:
+   ```bash
+   git clone <repository-url>
+   cd Studio5000_MCP_Server
+   pip install -r requirements.txt
+   ```
+
+3. **Install Studio 5000 SDK** (for .ACD files):
+   ```bash
+   pip install "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\logix_designer_sdk-*-py3-none-any.whl"
+   ```
+
+4. **Test the Installation**:
+   ```bash
+   python src/mcp_server/studio5000_mcp_server.py --test
+   ```
+   ✅ Should show: Documentation indexed, SDK available, tests passing
+
+5. **Ready to Use!** - The server will auto-detect your Studio 5000 installation paths
+
+**Having Issues?** See the [Troubleshooting](#troubleshooting) section below.
+
 ## 🚀 AI-Powered Features
 
 ### **🧠 Natural Language to PLC Code**
@@ -34,32 +91,102 @@ This revolutionary MCP (Model Context Protocol) server transforms PLC programmin
 - **Language Support**: Information about which programming languages support each instruction (Ladder, ST, FBD)
 - **Real-time Validation**: Instant validation using official Rockwell documentation
 
-## Installation
+## 📋 Detailed Installation Guide
 
-### Prerequisites
+### Prerequisites - READ THIS FIRST! ⚠️
 
-**CRITICAL:** This project requires **Python 3.12** for SDK features to work properly. The Studio 5000 SDK and MCP integration will not function with earlier Python versions.
+**🚨 CRITICAL REQUIREMENT: Python 3.12 ONLY**
+- This project **REQUIRES Python 3.12** - earlier versions will fail
+- Studio 5000 SDK is **incompatible** with Python 3.11 and earlier
+- **Verify your Python version FIRST** before proceeding
 
-- **Python 3.12** (Required for Studio 5000 SDK integration)
-- **Studio 5000 Logix Designer v36 or later** installed (for documentation access and SDK)
+**System Requirements:**
+- **Python 3.12.x** (Download from [python.org](https://www.python.org/downloads/))
+- **Studio 5000 Logix Designer v36 or later** installed
 - **Windows Operating System** (Studio 5000 SDK is Windows-only)
+- **Administrator privileges** may be required for initial setup
 
-### Setup
+### Step-by-Step Setup
 
-1. **Install Python 3.12**:
-   - Download Python 3.12 from [python.org](https://www.python.org/downloads/)
-   - **Important**: During installation, check "Add Python to PATH"
-   - Verify installation: `python --version` should show 3.12.x
+#### Step 1: Install Python 3.12
+1. **Download**: Go to [python.org](https://www.python.org/downloads/) and download Python 3.12
+2. **Install**: During installation, **CHECK "Add Python to PATH"** ✅
+3. **Verify**: Open Command Prompt and run:
+   ```bash
+   python --version
+   # Must show: Python 3.12.x (if not, restart command prompt)
+   ```
 
-2. **Clone and Setup Project**:
+#### Step 2: Get the Project
+1. **Clone the repository**:
    ```bash
    git clone <repository-url>
    cd Studio5000_MCP_Server
+   ```
+
+#### Step 3: Install Dependencies (CRITICAL!)
+1. **Install all required packages**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   **This installs**: BeautifulSoup, XML processing, vector databases, and AI components
+   
+   **If you get errors**, try:
+   ```bash
+   python -m pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-3. **Configure Environment Variables** (Recommended):
-   This step is optional, as it should use the default locations where the sdk and docs should be located. If you did happen to place them in another place, you can use this to change where the mcp server looks for these required items.
+#### Step 3.5: Install Studio 5000 SDK (CRITICAL for .ACD files!) 🚨
+**⚠️ TEAMMATES MUST DO THIS STEP** - Skip only if you don't need .ACD file creation
+
+1. **Find the SDK wheel file** in your Studio 5000 installation:
+   ```bash
+   # Look for this file (version may vary):
+   dir "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\logix_designer_sdk-*-py3-none-any.whl"
+   ```
+
+2. **Install the SDK wheel file**:
+   ```bash
+   # Replace with your actual file path and version:
+   pip install "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\logix_designer_sdk-2.0.1-py3-none-any.whl"
+   ```
+
+3. **Alternative - if you can't find the wheel file**:
+   ```bash
+   # Navigate to the SDK directory and install from there:
+   cd "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python"
+   pip install logix_designer_sdk-*-py3-none-any.whl
+   ```
+
+**Without this step**: Documentation and L5X generation will work, but .ACD file creation will fail!
+
+#### Step 4: Test Your Installation ✅
+1. **Run the test command**:
+   ```bash
+   python src/mcp_server/studio5000_mcp_server.py --test
+   ```
+
+2. **You should see**:
+   - ✅ "Documentation indexed successfully" (500+ instructions found)
+   - ✅ "SDK Available: True" (if you installed the SDK wheel file correctly)
+   - ✅ "SDK Available: False" (OK if you skipped SDK installation - L5X generation still works)
+   - ✅ Sample search results and code generation tests
+
+3. **If SDK Available shows False** but you installed the wheel file:
+   - Check the wheel file path was correct
+   - Try: `python -c "import logix_designer_sdk; print('SDK OK')"`
+
+4. **If tests fail completely**, check the [Troubleshooting](#troubleshooting) section
+
+🎉 **You're Ready to Use the Tool!** 🎉
+
+The server will automatically detect your Studio 5000 installation paths. Skip to the [Configuration for Claude Desktop](#configuration-for-claude-desktop) section to start using it!
+
+---
+
+#### Step 5: Configure Environment Variables (Advanced Users Only)
+**⚠️ SKIP THIS STEP** - Only needed if Studio 5000 is installed in non-standard locations
 
    **Option A: Set via Windows Environment Variables**
    - Open System Properties → Environment Variables
@@ -383,19 +510,26 @@ python --version
 #### 3. **SDK Not Available**
 **Problem**: "Studio 5000 SDK not available" or "SDK import failed"
 
+**Most Common Cause**: **You didn't install the SDK wheel file!** ⚠️
+
 **Solution**:
-1. **Check SDK Installation**:
+1. **🚨 CRITICAL: Install the SDK wheel file first**:
+   ```bash
+   # Find and install the wheel file (most teammates miss this step!)
+   pip install "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\logix_designer_sdk-*-py3-none-any.whl"
+   ```
+
+2. **Check SDK Installation**:
    - Look for: `C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\`
    - If missing, reinstall Studio 5000 with SDK components
 
-2. **Verify SDK Path**:
+3. **Verify SDK Works**:
    ```bash
-   # Check if logix_designer_sdk is available
-   cd "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python"
+   # Test if SDK is now available
    python -c "import logix_designer_sdk; print('SDK OK')"
    ```
 
-3. **Set SDK Path**:
+4. **If still failing, set SDK Path**:
    ```bash
    set STUDIO5000_SDK_PATH=C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python
    ```
@@ -481,8 +615,8 @@ python src/mcp_server/studio5000_mcp_server.py --test
 # Test 3: Documentation path
 dir "C:\Program Files (x86)\Rockwell Software\Studio 5000\Logix Designer\ENU\v36\Bin\Help\ENU\rs5000\17691.htm"
 
-# Test 4: SDK availability
-python -c "import sys; sys.path.append(r'C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python'); import logix_designer_sdk; print('SDK Available')"
+# Test 4: SDK availability (after installing wheel file)
+python -c "import logix_designer_sdk; print('SDK Available')"
 
 # Test 5: Environment variables
 echo %STUDIO5000_DOC_PATH%
@@ -499,24 +633,7 @@ If you're still having issues:
 
 ### Testing the Server
 
-Run the test mode to verify everything is working:
-
-```bash
-# Recommended: Using environment variables
-python src/mcp_server/studio5000_mcp_server.py --test
-
-# Alternative: Explicit path
-python src/mcp_server/studio5000_mcp_server.py --doc-root "C:\Program Files (x86)\Rockwell Software\Studio 5000\Logix Designer\ENU\v36\Bin\Help\ENU\rs5000" --test
-```
-
-**Successful test output should show**:
-- ✅ Documentation indexing (500+ instructions found)
-- ✅ Sample search results for timer instructions
-- ✅ Instruction details retrieval
-- ✅ Available categories listing
-- ✅ AI code generation test
-- ✅ L5X project creation test
-- ✅ SDK availability status
+For testing instructions, see **Step 4** in the [installation guide](#step-by-step-setup) above.
 
 ## Technical Details
 
