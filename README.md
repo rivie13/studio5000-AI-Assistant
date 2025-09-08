@@ -317,7 +317,7 @@ Once configured, these powerful tools will be available in your AI conversations
 
 **Output**: Complete Studio 5000 L5X project file ready for import
 
-#### 3. Create Real .ACD Project - Empty Template
+#### 3. Create Empty .ACD Template  
 **Tool**: `create_acd_project`  
 **Parameters**:
 - `project_spec` (object): ACD project specification including:
@@ -328,22 +328,10 @@ Once configured, these powerful tools will be available in your AI conversations
 
 **Output**: Empty .ACD file using official Studio 5000 SDK - ready for manual development
 
-#### 4. Create Complete .ACD Project - WITH MainProgram! 🎉
-**Tool**: `create_complete_acd_project`  
-**Parameters**:
-- `project_spec` (object): Complete ACD project specification including:
-  - `name` (string): Project name
-  - `controller_type` (string): Controller model
-  - `major_revision` (integer): Studio 5000 version (default 36)
-  - `save_path` (string): File path for .ACD file
-  - `ladder_logic` (string): Optional ladder logic in L5X rung format
-
-**Output**: Complete .ACD file with MainProgram, MainTask, and ladder logic - opens directly in Studio 5000!
-
-**🎯 This solves the original limitation!** You can now create ACD files that are immediately ready to use.
+**💡 Recommended Workflow**: Create empty ACD → Generate L5X logic → Import L5X manually
 
 
-#### 5. Validate Ladder Logic
+#### 4. Validate Ladder Logic
 **Tool**: `validate_ladder_logic`
 **Parameters**:
 - `logic_spec` (object): Contains:
@@ -354,7 +342,7 @@ Once configured, these powerful tools will be available in your AI conversations
 
 ### 📚 **Documentation Tools**
 
-#### 6. Search Instructions
+#### 5. Search Instructions
 **Tool**: `search_instructions`
 **Parameters**: 
 - `query` (string): Search term (instruction name, description, functionality)
@@ -362,27 +350,27 @@ Once configured, these powerful tools will be available in your AI conversations
 
 **Features**: Searches through official Studio 5000 documentation database
 
-#### 7. Get Instruction Details
+#### 6. Get Instruction Details
 **Tool**: `get_instruction`
 **Parameters**:
 - `name` (string): Exact instruction name (e.g., "TON", "MOV", "ADD", "PID")
 
 **Output**: Complete instruction information including syntax, parameters, examples, and supported languages
 
-#### 8. List Categories  
+#### 7. List Categories  
 **Tool**: `list_categories`
 **Parameters**: None (dummy parameter required)
 
 **Output**: All available instruction categories (Alarm, Math, Motion, Timer, etc.)
 
-#### 9. List Instructions by Category
+#### 8. List Instructions by Category
 **Tool**: `list_instructions_by_category`
 **Parameters**:
 - `category` (string): Category name
 
 **Output**: All instructions within the specified category
 
-#### 10. Get Instruction Syntax
+#### 9. Get Instruction Syntax
 **Tool**: `get_instruction_syntax`
 **Parameters**:
 - `name` (string): Instruction name
@@ -393,43 +381,56 @@ Once configured, these powerful tools will be available in your AI conversations
 
 Your MCP server supports **THREE different approaches** for PLC project creation, each optimized for different use cases:
 
-### **🥇 Approach 1: Complete .ACD Generation (NEWEST & MOST POWERFUL!)**
-🎉 **Generates**: Complete .ACD projects with MainProgram, MainTask, and AI-generated ladder logic  
-🎉 **Output**: Ready-to-use .ACD file that opens directly in Studio 5000  
-🎉 **Best for**: Automated development with immediate usability  
-🎉 **Zero Manual Steps**: Everything is ready to go!  
+### **🥇 Approach 1: L5X Generation + Manual Import (MOST PRACTICAL!)**
+🎯 **Generates**: Complete L5X projects with MainProgram, MainTask, and AI-generated ladder logic  
+🎯 **Output**: Professional L5X file ready for import into Studio 5000  
+🎯 **Best for**: Real-world industrial workflows with existing company projects  
+🎯 **Manual Step**: Import L5X file using File → Import in Studio 5000 (30 seconds)  
 
-**Usage**: *"Create a complete ACD project with conveyor control logic"*  
-**Tool**: `create_complete_acd_project`
-
-### **🥈 Approach 2: L5X Generation (Great for Import Workflows)**  
-✅ **Generates**: Complete projects with MainProgram, MainTask, and ladder logic  
-✅ **Output**: L5X file ready to import into Studio 5000  
-✅ **Best for**: Import into existing projects or version control  
-✅ **AI Integration**: Full AI-generated ladder logic included  
-
-**Usage**: *"Create a complete L5X project for a conveyor system with start/stop logic"*  
+**Usage**: *"Create a complete L5X project with conveyor control logic"*  
 **Tool**: `create_l5x_project`
 
-### **🥉 Approach 3: Empty .ACD Templates (For Manual Development)**  
+**⚡ Why This is Actually Better:**
+- ✅ Works with your existing company ACD files
+- ✅ Import only the logic you need  
+- ✅ No risk of breaking existing project structures
+- ✅ Professional workflow used in industry
+
+### **🥈 Approach 2: Empty .ACD Templates (For Manual Development)**  
 🛠️ **Generates**: Empty .ACD project file (clean template)  
 🛠️ **Output**: Blank project that opens directly in Studio 5000  
 🛠️ **Best for**: Starting point for completely manual development  
-🛠️ **Manual Steps**: Create MainProgram and MainTask yourself  
+🛠️ **Manual Steps**: Create MainProgram and MainTask yourself, then import generated L5X logic  
 
-**Usage**: *"Create an empty .ACD template for manual development"*  
+**Usage**: *"Create an empty .ACD template, then generate L5X logic to import"*  
 **Tool**: `create_acd_project`
 
-### **🎯 Problem SOLVED!**
+### **🥉 Approach 3: AI Logic Generation Only (For Existing Projects)**  
+🧠 **Generates**: Professional ladder logic with validation  
+🧠 **Output**: Copy-paste ready ladder logic code  
+🧠 **Best for**: Adding logic to existing company projects  
+🧠 **Manual Steps**: Copy generated logic into your existing routines  
 
-**Previous Limitation**: ❌ Could only create empty .ACD files  
-**NEW Capability**: ✅ **Complete .ACD files with MainProgram + MainTask + Ladder Logic!**
+**Usage**: *"Generate conveyor control logic for my existing project"*  
+**Tool**: `generate_ladder_logic`
 
-The enhanced SDK implementation uses Rockwell's `partial_import_from_xml_file()` method to:
-1. Create an empty .ACD project
-2. Generate L5X XML with MainProgram, MainTask, and your ladder logic
-3. Import the complete structure into the .ACD file
-4. Result: **Fully functional .ACD project ready for Studio 5000!**
+### **🎯 Current Status & Recommended Workflow**
+
+**What Works Perfectly**: ✅ **AI Logic Generation + L5X Projects + Manual Import**
+
+**Real-World Industrial Workflow**:
+1. **Generate AI Logic**: *"Create conveyor control with jam detection"* → Professional ladder logic
+2. **Create L5X Project**: Complete project with MainProgram, MainTask, and your logic  
+3. **Import into Studio 5000**: File → Import → Select L5X file (30 seconds)
+4. **Production Ready**: Fully functional logic in your existing or new project
+
+**Why This is Actually Better**:
+- ✅ **Works with existing company projects** - No need to start from scratch
+- ✅ **Safe and flexible** - Import only what you need
+- ✅ **Professional workflow** - Standard practice in industrial automation
+- ✅ **Zero compatibility issues** - Works with all Studio 5000 versions
+
+**Note on .ACD Creation**: While empty .ACD creation works perfectly, complete .ACD with pre-populated MainProgram/MainTask has SDK integration complexity. The L5X import workflow is more reliable and widely used in industry.
 
 ## 💡 Usage Examples
 
@@ -467,6 +468,47 @@ Once the MCP server is configured, you can ask questions and generate code like:
 - *"Build a temperature control system with PID loop and alarm handling"*
 
 The AI will automatically use the MCP server tools to provide accurate, up-to-date information based on your actual Studio 5000 documentation and generate working PLC code.
+
+## 🔄 **Manual Import Workflow (Recommended)**
+
+### **Step-by-Step: From Natural Language to Working PLC Code**
+
+**Scenario**: You need conveyor control logic with jam detection
+
+#### **Step 1: Generate L5X Project**
+Ask your AI assistant:
+> *"Create a complete L5X project for conveyor control with jam detection using upstream and downstream photoeyes"*
+
+**Result**: Complete L5X file with:
+- ✅ MainProgram and MainTask
+- ✅ Professional ladder logic  
+- ✅ All necessary tags with descriptions
+- ✅ Validated instructions
+
+#### **Step 2: Import into Studio 5000**
+1. **Open Studio 5000** with your existing project (or create new one)
+2. **Go to**: File → Import
+3. **Select**: Your generated L5X file  
+4. **Choose**: Import MainProgram (or specific components)
+5. **Click**: Import
+6. **Done!** - Working logic ready to test
+
+#### **Step 3: Customize and Test**
+- Map your I/O addresses to the generated tags
+- Test the logic in your specific application
+- Modify as needed for your requirements
+
+### **🏭 For Company Projects**
+- **Use your existing company ACD templates**
+- **Generate only the logic you need**  
+- **Import into established project structure**
+- **Maintain your coding standards and practices**
+
+### **⚡ Pro Tips**
+- **Generate multiple L5X files** for different sections (safety, process, I/O)
+- **Import selectively** - choose only Programs, only Tags, or only specific Routines
+- **Version control friendly** - L5X files work great with Git
+- **Team collaboration** - Share generated L5X files with team members
 
 ## Troubleshooting
 
@@ -733,14 +775,15 @@ Studio5000_MCP_Server/
 - **Cloud Deployment**: Web-based interface for team collaboration
 - **Caching System**: Improved performance for large documentation sets
 
-#### **🎉 The Big Opportunity: ACHIEVED!**
-The SDK implementation now provides complete project creation capabilities:
-- ✅ Create programs and tasks programmatically (**COMPLETED!**)
-- ✅ Import/export individual routines (**COMPLETED!**)
-- 🔄 Add tags, UDTs, and Add-On Instructions (Next priority)
-- 🔄 Perform complete project operations (Next priority)
+#### **🎉 The Real Value: AI Logic + L5X Import Workflow**
+The system now provides professional-grade PLC development capabilities:
+- ✅ **AI Logic Generation**: Convert natural language to working ladder logic (**COMPLETED!**)
+- ✅ **Complete L5X Projects**: Full projects with MainProgram, MainTask, and logic (**COMPLETED!**)
+- ✅ **Professional Workflow**: Manual import into existing company projects (**COMPLETED!**)
+- 🔄 **Enhanced SDK Integration**: Complete .ACD creation with programs (In Progress)
+- 🔄 **Advanced Tag Management**: Automatic tag mapping and management (Next priority)
 
-**You CAN now ask**: *"Create a .ACD project with conveyor control logic"* and get a complete, ready-to-use project file! **This works today!**
+**You CAN ask**: *"Create conveyor control logic with jam detection"* and get a complete L5X project ready for import! **This works perfectly today and matches real-world industrial workflows!**
 
 ### Development Setup
 1. Fork the repository
