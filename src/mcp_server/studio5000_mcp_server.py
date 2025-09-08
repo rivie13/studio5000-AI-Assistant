@@ -405,6 +405,12 @@ class Studio5000MCPServer:
         )
         
         self.server.add_tool(
+            "create_l5x_routine",
+            "Create L5X routine export file that can be imported into existing ACD projects",
+            self.create_l5x_routine
+        )
+        
+        self.server.add_tool(
             "validate_ladder_logic",
             "Validate ladder logic using Studio 5000 documentation",
             self.validate_ladder_logic
@@ -690,6 +696,145 @@ class Studio5000MCPServer:
                 'message': 'Failed to create L5X project'
             }
     
+    async def create_l5x_routine(self, routine_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Create L5X routine export file that can be imported into existing ACD projects"""
+        try:
+            from code_generator.l5x_generator import L5XGenerator, Routine, LadderRung
+            
+            # Extract routine specification
+            routine_name = routine_spec.get('name', 'SIMPLE_TEST')
+            specification = routine_spec.get('specification', '')
+            controller_name = routine_spec.get('controller_name', 'MTN6_MCM06')
+            software_revision = routine_spec.get('software_revision', '36.02')
+            save_path = routine_spec.get('save_path')
+            
+            # Generate ladder logic using enhanced assistant
+            ladder_result = await self.enhanced_assistant.generate_ladder_logic(specification)
+            
+            if not ladder_result.get('success', False):
+                return {
+                    'success': False,
+                    'error': ladder_result.get('error', 'Failed to generate ladder logic'),
+                    'message': 'Failed to generate ladder logic for routine'
+                }
+            
+            # Parse the generated ladder logic into rungs
+            ladder_logic = ladder_result.get('ladder_logic', '')
+            ladder_lines = [line.strip() for line in ladder_logic.split('\n') if line.strip()]
+            
+            # Create rungs from ladder logic
+            rungs = []
+            rung_number = 0
+            current_comment = None
+            
+            for line in ladder_lines:
+                if line.startswith('//'):
+                    # This is a comment for the next rung
+                    current_comment = line[2:].strip()
+                elif line and not line.startswith('//'):
+                    # This is ladder logic
+                    rung = LadderRung(
+                        number=rung_number,
+                        logic=line,
+                        comment=current_comment
+                    )
+                    rungs.append(rung)
+                    rung_number += 1
+                    current_comment = None
+            
+            # If no rungs were created, create a simple default rung
+            if not rungs:
+                rungs = [
+                    LadderRung(
+                        number=0,
+                        logic="XIC(Start_Test)XIO(Stop_Test)OTL(Test_Running);",
+                        comment="Start/Stop logic"
+                    ),
+                    LadderRung(
+                        number=1,
+                        logic="XIC(Test_Running)TON(Test_Timer,5000,0);",
+                        comment="Timer logic - 5 second timer"
+                    ),
+                    LadderRung(
+                        number=2,
+                        logic="XIC(Test_Timer.EN)OTE(Test_Output);",
+                        comment="Output active during timer"
+                    ),
+                    LadderRung(
+                        number=3,
+                        logic="XIC(Test_Timer.DN)OTU(Test_Running);",
+                        comment="Auto-reset when timer done"
+                    )
+                ]
+            
+            # Create the routine
+            routine = Routine(
+                name=routine_name,
+                type="RLL",
+                rungs=rungs,
+                description=f"Generated routine: {specification[:100]}..."
+            )
+            
+            # Extract tags from the ladder result
+            tags = []
+            if 'tags' in ladder_result:
+                for tag in ladder_result['tags']:
+                    tags.append({
+                        'name': tag['name'],
+                        'data_type': tag['data_type'],
+                        'description': tag.get('description', '')
+                    })
+            else:
+                # Default tags for the simple test routine
+                tags = [
+                    {'name': 'Start_Test', 'data_type': 'BOOL', 'description': 'Start test button'},
+                    {'name': 'Stop_Test', 'data_type': 'BOOL', 'description': 'Stop test button'},
+                    {'name': 'Test_Running', 'data_type': 'BOOL', 'description': 'Test running status'},
+                    {'name': 'Test_Timer', 'data_type': 'TIMER', 'description': '5 second test timer', 'preset_value': 5000},
+                    {'name': 'Test_Output', 'data_type': 'BOOL', 'description': 'Test output'}
+                ]
+            
+            # Generate the routine export L5X
+            generator = L5XGenerator()
+            l5x_content = generator.generate_routine_export(
+                routine=routine,
+                controller_name=controller_name,
+                tags=tags,
+                software_revision=software_revision
+            )
+            
+            # Save to file if path provided
+            file_saved = False
+            if save_path:
+                file_saved = generator.save_routine_export(
+                    routine=routine,
+                    file_path=save_path,
+                    controller_name=controller_name,
+                    tags=tags,
+                    software_revision=software_revision
+                )
+            
+            return {
+                'success': True,
+                'routine_name': routine_name,
+                'controller_name': controller_name,
+                'l5x_content': l5x_content,
+                'ladder_logic': ladder_logic,
+                'tags_created': len(tags),
+                'rungs_created': len(rungs),
+                'instructions_used': ladder_result.get('instructions_used', []),
+                'file_saved': file_saved,
+                'save_path': save_path,
+                'export_type': 'routine_export'
+            }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to create L5X routine export'
+            }
+    
     async def validate_ladder_logic(self, logic_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Validate ladder logic using enhanced validation with Studio 5000 documentation"""
         try:
@@ -889,6 +1034,21 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
                     }
                 }
                 required = ['project_spec']
+            elif name == 'create_l5x_routine':
+                properties = {
+                    'routine_spec': {
+                        'type': 'object',
+                        'description': 'Routine specification for export',
+                        'properties': {
+                            'name': {'type': 'string', 'description': 'Routine name'},
+                            'controller_name': {'type': 'string', 'description': 'Existing controller name (e.g., MTN6_MCM06)'},
+                            'specification': {'type': 'string', 'description': 'Natural language specification for routine logic'},
+                            'software_revision': {'type': 'string', 'description': 'Studio 5000 software revision (default: 36.02)'},
+                            'save_path': {'type': 'string', 'description': 'File path to save routine L5X export'}
+                        }
+                    }
+                }
+                required = ['routine_spec']
             elif name == 'validate_ladder_logic':
                 properties = {
                     'logic_spec': {
