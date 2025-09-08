@@ -297,23 +297,20 @@ class Studio5000MCPServer:
                 new_loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(new_loop)
                 try:
-                    # Force rebuild to ensure fresh data (temporary fix for cache issues)
+                    # Use cached data when available to speed up initialization
                     new_loop.run_until_complete(
-                        self.instruction_integration.initialize(self.instructions, force_rebuild=True)
+                        self.instruction_integration.initialize(self.instructions, force_rebuild=False)
                     )
                 finally:
                     new_loop.close()
             
             print("Initializing instruction vector database (blocking)...", file=sys.stderr)
-            # Run in a thread and wait for completion
+            # Run in a thread and wait for completion - NO TIMEOUT, let it finish properly
             init_thread = threading.Thread(target=run_async_init)
             init_thread.start()
-            init_thread.join(timeout=30)  # Wait up to 30 seconds
+            init_thread.join()  # Wait indefinitely for completion
             
-            if init_thread.is_alive():
-                print("❌ Instruction vector database initialization timed out!", file=sys.stderr)
-            else:
-                print("✅ Instruction vector database initialized successfully!", file=sys.stderr)
+            print("✅ Instruction vector database initialized successfully!", file=sys.stderr)
                 
         except Exception as e:
             print(f"❌ Failed to initialize instruction vector database: {e}", file=sys.stderr)
@@ -335,23 +332,20 @@ class Studio5000MCPServer:
                 new_loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(new_loop)
                 try:
-                    # Force rebuild to ensure fresh data (temporary fix for cache issues)
+                    # Use cached data when available to speed up initialization
                     new_loop.run_until_complete(
-                        self.sdk_integration.initialize(force_rebuild=True)
+                        self.sdk_integration.initialize(force_rebuild=False)
                     )
                 finally:
                     new_loop.close()
             
             print("Initializing SDK vector database (blocking)...", file=sys.stderr)
-            # Run in a thread and wait for completion
+            # Run in a thread and wait for completion - NO TIMEOUT, let it finish properly
             sdk_init_thread = threading.Thread(target=run_async_sdk_init)
             sdk_init_thread.start()
-            sdk_init_thread.join(timeout=30)  # Wait up to 30 seconds
+            sdk_init_thread.join()  # Wait indefinitely for completion
             
-            if sdk_init_thread.is_alive():
-                print("❌ SDK vector database initialization timed out!", file=sys.stderr)
-            else:
-                print("✅ SDK vector database initialized successfully!", file=sys.stderr)
+            print("✅ SDK vector database initialized successfully!", file=sys.stderr)
                 
         except Exception as e:
             print(f"❌ Failed to initialize SDK vector database: {e}", file=sys.stderr)
