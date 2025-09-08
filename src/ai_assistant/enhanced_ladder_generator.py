@@ -126,10 +126,11 @@ class EnhancedLadderLogicGenerator:
             for pattern_comp in pattern.components:
                 if any(pattern_comp.lower() in req_comp for req_comp in req_components):
                     score += 1
-            pattern_scores[pattern] = score
+            pattern_scores[pattern.name] = (score, pattern)  # Use pattern name as key, store tuple
         
         # Return highest scoring pattern
-        return max(pattern_scores, key=pattern_scores.get)
+        best_pattern_name = max(pattern_scores.keys(), key=lambda name: pattern_scores[name][0])
+        return pattern_scores[best_pattern_name][1]  # Return the pattern object
     
     async def _customize_pattern(self, pattern: WarehousePattern, 
                                requirements: EnhancedPLCRequirement) -> EnhancedGeneratedCode:
@@ -137,7 +138,7 @@ class EnhancedLadderLogicGenerator:
         
         # Start with the pattern template
         ladder_logic = pattern.ladder_logic_template
-        tags = pattern.required_tags.copy() if pattern.required_tags else []
+        tags = list(pattern.required_tags) if pattern.required_tags else []
         
         # Customize tag names based on requirements
         tag_mapping = self._create_tag_mapping(requirements, pattern)

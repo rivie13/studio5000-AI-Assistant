@@ -8,6 +8,7 @@ to provide real-time instruction validation and documentation lookup.
 
 import asyncio
 import json
+import sys
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 
@@ -187,8 +188,13 @@ class MCPIntegratedAssistant:
         """
         
         try:
-            # This would integrate with the existing SDK interface
-            # For now, return a structured response
+            # Import the actual SDK interface
+            import sys
+            from pathlib import Path
+            
+            # Add parent directory to path to access SDK interface
+            sys.path.append(str(Path(__file__).parent.parent))
+            from sdk_interface.studio5000_sdk import studio5000_sdk
             
             project_name = project_spec.get('name', 'WarehouseAutomation')
             controller_type = project_spec.get('controller_type', '1756-L83E')
@@ -196,25 +202,49 @@ class MCPIntegratedAssistant:
             major_revision = project_spec.get('major_revision', 36)
             
             # Generate ladder logic if specification provided
+            ladder_logic_xml = ""
             ladder_result = None
-            if 'specification' in project_spec:
-                ladder_result = await self.generate_ladder_logic(project_spec['specification'])
             
-            return {
-                'success': True,
-                'message': 'ACD project creation initiated',
-                'project_name': project_name,
+            if 'specification' in project_spec:
+                print("Generating ladder logic for ACD project...", file=sys.stderr)
+                ladder_result = await self.generate_ladder_logic(project_spec['specification'])
+                
+                if ladder_result['success']:
+                    # Convert ladder logic to L5X XML format for import
+                    ladder_logic_xml = self._convert_ladder_logic_to_l5x_xml(ladder_result)
+                    print(f"Generated {len(ladder_result['ladder_logic'])} chars of ladder logic", file=sys.stderr)
+                else:
+                    print(f"Ladder logic generation failed: {ladder_result['error']}", file=sys.stderr)
+            
+            # Create the actual ACD project using the real SDK
+            sdk_project_spec = {
+                'name': project_name,
                 'controller_type': controller_type,
                 'major_revision': major_revision,
-                'save_path': save_path,
-                'ladder_logic_generated': ladder_result is not None,
-                'next_steps': [
-                    'Use Studio 5000 SDK to create actual ACD file',
-                    'Import generated ladder logic',
-                    'Configure I/O modules',
-                    'Test in simulation mode'
-                ]
+                'save_path': save_path
             }
+            
+            # Add the ladder logic XML to the project spec
+            if ladder_logic_xml:
+                sdk_project_spec['ladder_logic'] = ladder_logic_xml
+            
+            print("Creating actual ACD project with MainProgram and MainTask using Studio 5000 SDK...", file=sys.stderr)
+            # For debugging, first try without any ladder logic to test basic XML structure
+            debug_spec = sdk_project_spec.copy()
+            debug_spec['ladder_logic'] = ''  # Empty for now to test basic XML
+            result = await studio5000_sdk.create_acd_project_with_programs(debug_spec)
+            
+            # Enhance the result with ladder logic info
+            if result['success'] and ladder_result:
+                result['ladder_logic_info'] = {
+                    'rungs_generated': ladder_result['ladder_logic'].count('XIC') + ladder_result['ladder_logic'].count('XIO'),
+                    'tags_created': len(ladder_result['tags']),
+                    'instructions_used': ladder_result['instructions_used'],
+                    'complexity': ladder_result.get('complexity', 'unknown'),
+                    'domain': ladder_result.get('domain', 'unknown')
+                }
+            
+            return result
             
         except Exception as e:
             return {
@@ -222,6 +252,39 @@ class MCPIntegratedAssistant:
                 'error': str(e),
                 'message': 'ACD project creation failed'
             }
+    
+    def _convert_ladder_logic_to_l5x_xml(self, ladder_result: Dict[str, Any]) -> str:
+        """Convert generated ladder logic to L5X XML format"""
+        ladder_logic = ladder_result['ladder_logic']
+        
+        # Split into rungs (each line ending with semicolon is a rung)
+        rungs = []
+        rung_number = 0
+        
+        for line in ladder_logic.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('//'):
+                if line.endswith(';'):
+                    rungs.append(f'''<Rung Number="{rung_number}" Type="N">
+    <Text>
+        <![CDATA[{line}]]>
+    </Text>
+</Rung>''')
+                    rung_number += 1
+                elif '//' not in line:  # Skip comments
+                    # Handle multi-line rungs
+                    if rungs and not rungs[-1].endswith('</Rung>'):
+                        # Append to previous rung
+                        rungs[-1] = rungs[-1].replace('</Rung>', f' {line}</Rung>')
+        
+        return '\n'.join(rungs) if rungs else '''<Rung Number="0" Type="N">
+    <Comment>
+        <![CDATA[AI Generated Conveyor Control System]]>
+    </Comment>
+    <Text>
+        <![CDATA[NOP();]]>
+    </Text>
+</Rung>'''
     
     async def _enhance_with_mcp_validation(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Enhance result with comprehensive MCP validation"""

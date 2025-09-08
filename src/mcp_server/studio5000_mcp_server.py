@@ -267,13 +267,13 @@ class Studio5000MCPServer:
     
     async def _ensure_instruction_db_ready(self):
         """Ensure the instruction vector database is fully initialized"""
-        if hasattr(self, '_instruction_db_init_task') and self._instruction_db_init_task:
-            try:
-                await self._instruction_db_init_task
-                self._instruction_db_init_task = None  # Clear the task once completed
-            except Exception as e:
-                import sys
-                print(f"Instruction vector database initialization failed: {e}", file=sys.stderr)
+        # Database is now initialized synchronously in __init__, so this is a no-op
+        pass
+    
+    async def _ensure_sdk_db_ready(self):
+        """Ensure the SDK vector database is fully initialized"""
+        # Database is now initialized synchronously in __init__, so this is a no-op
+        pass
     
     def _initialize(self):
         """Initialize the server with documentation index"""
@@ -284,26 +284,80 @@ class Studio5000MCPServer:
         self.instructions = self.parser.build_instruction_index()
         print(f"Indexed {len(self.instructions)} instructions", file=sys.stderr)
         
-        # Initialize instruction vector database asynchronously - schedule for later
+        # Initialize instruction vector database - use blocking approach for immediate initialization
         print("Building instruction vector database...", file=sys.stderr)
         self._instruction_db_init_task = None
         try:
             import asyncio
-            # Check if we're already in an event loop
-            try:
-                loop = asyncio.get_running_loop()
-                # We're in a running loop, create a task for later
-                self._instruction_db_init_task = loop.create_task(
-                    self.instruction_integration.initialize(self.instructions, force_rebuild=False)
-                )
-                print("Instruction vector database initialization scheduled", file=sys.stderr)
-            except RuntimeError:
-                # No running event loop, we can run synchronously
-                asyncio.run(self.instruction_integration.initialize(self.instructions, force_rebuild=False))
-                print("Instruction vector database initialized successfully", file=sys.stderr)
+            import threading
+            
+            # Use a thread to run the async initialization synchronously
+            def run_async_init():
+                """Run async initialization in a new event loop in a thread"""
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    # Force rebuild to ensure fresh data (temporary fix for cache issues)
+                    new_loop.run_until_complete(
+                        self.instruction_integration.initialize(self.instructions, force_rebuild=True)
+                    )
+                finally:
+                    new_loop.close()
+            
+            print("Initializing instruction vector database (blocking)...", file=sys.stderr)
+            # Run in a thread and wait for completion
+            init_thread = threading.Thread(target=run_async_init)
+            init_thread.start()
+            init_thread.join(timeout=30)  # Wait up to 30 seconds
+            
+            if init_thread.is_alive():
+                print("❌ Instruction vector database initialization timed out!", file=sys.stderr)
+            else:
+                print("✅ Instruction vector database initialized successfully!", file=sys.stderr)
+                
         except Exception as e:
-            print(f"Warning: Failed to initialize instruction vector database: {e}", file=sys.stderr)
+            print(f"❌ Failed to initialize instruction vector database: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
             print("Falling back to basic text search", file=sys.stderr)
+            # Continue without vector database - fallbacks will handle this
+        
+        # CRITICAL FIX: Initialize SDK documentation vector database - use blocking approach
+        print("Building SDK documentation vector database...", file=sys.stderr)
+        self._sdk_db_init_task = None
+        try:
+            import asyncio
+            import threading
+            
+            # Use a thread to run the async initialization synchronously
+            def run_async_sdk_init():
+                """Run async SDK initialization in a new event loop in a thread"""
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    # Force rebuild to ensure fresh data (temporary fix for cache issues)
+                    new_loop.run_until_complete(
+                        self.sdk_integration.initialize(force_rebuild=True)
+                    )
+                finally:
+                    new_loop.close()
+            
+            print("Initializing SDK vector database (blocking)...", file=sys.stderr)
+            # Run in a thread and wait for completion
+            sdk_init_thread = threading.Thread(target=run_async_sdk_init)
+            sdk_init_thread.start()
+            sdk_init_thread.join(timeout=30)  # Wait up to 30 seconds
+            
+            if sdk_init_thread.is_alive():
+                print("❌ SDK vector database initialization timed out!", file=sys.stderr)
+            else:
+                print("✅ SDK vector database initialized successfully!", file=sys.stderr)
+                
+        except Exception as e:
+            print(f"❌ Failed to initialize SDK vector database: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            print("Falling back to basic SDK search", file=sys.stderr)
             # Continue without vector database - fallbacks will handle this
         
         # Register tools
@@ -668,6 +722,7 @@ class Studio5000MCPServer:
     async def search_sdk_documentation(self, query: str, limit: Optional[int] = 10) -> Dict[str, Any]:
         """Search Studio 5000 SDK documentation using natural language"""
         try:
+            await self._ensure_sdk_db_ready()  # Ensure SDK database is initialized
             result = await self.sdk_tools.search_sdk_documentation(query, limit)
             return result
         except Exception as e:
@@ -681,6 +736,7 @@ class Studio5000MCPServer:
     async def get_sdk_operation_info(self, name: str, operation_type: Optional[str] = None) -> Dict[str, Any]:
         """Get detailed information about a specific SDK operation"""
         try:
+            await self._ensure_sdk_db_ready()  # Ensure SDK database is initialized
             result = await self.sdk_tools.get_sdk_operation_info(name, operation_type)
             return result
         except Exception as e:
@@ -694,6 +750,7 @@ class Studio5000MCPServer:
     async def list_sdk_categories(self) -> Dict[str, Any]:
         """List all SDK operation categories"""
         try:
+            await self._ensure_sdk_db_ready()  # Ensure SDK database is initialized
             result = await self.sdk_tools.list_sdk_categories()
             return result
         except Exception as e:
@@ -706,6 +763,7 @@ class Studio5000MCPServer:
     async def get_sdk_operations_by_category(self, category: str) -> Dict[str, Any]:
         """Get all SDK operations in a specific category"""
         try:
+            await self._ensure_sdk_db_ready()  # Ensure SDK database is initialized
             result = await self.sdk_tools.get_sdk_operations_by_category(category)
             return result
         except Exception as e:
@@ -719,6 +777,7 @@ class Studio5000MCPServer:
     async def get_logix_project_methods(self, method_category: Optional[str] = None) -> Dict[str, Any]:
         """Get LogixProject methods, optionally filtered by category"""
         try:
+            await self._ensure_sdk_db_ready()  # Ensure SDK database is initialized
             result = await self.sdk_tools.get_logix_project_methods(method_category)
             return result
         except Exception as e:
@@ -732,6 +791,7 @@ class Studio5000MCPServer:
     async def suggest_sdk_operations(self, context: str) -> Dict[str, Any]:
         """Suggest relevant SDK operations based on context"""
         try:
+            await self._ensure_sdk_db_ready()  # Ensure SDK database is initialized
             result = await self.sdk_tools.suggest_sdk_operations(context)
             return result
         except Exception as e:
@@ -745,6 +805,7 @@ class Studio5000MCPServer:
     async def get_sdk_statistics(self) -> Dict[str, Any]:
         """Get SDK documentation statistics and overview"""
         try:
+            await self._ensure_sdk_db_ready()  # Ensure SDK database is initialized
             result = await self.sdk_tools.get_sdk_statistics()
             return result
         except Exception as e:

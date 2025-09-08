@@ -10,17 +10,17 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from .enhanced_code_assistant import EnhancedGeneratedCode, AutomationSequence, IndustrialComponent
 
-@dataclass
+@dataclass(frozen=True)
 class WarehousePattern:
     """Represents a reusable warehouse automation pattern"""
     name: str
     description: str
-    components: List[str]
+    components: tuple  # Changed from List[str] to tuple for hashability
     ladder_logic_template: str
     structured_text_template: Optional[str] = None
-    required_tags: List[Dict] = None
-    safety_considerations: List[str] = None
-    performance_notes: List[str] = None
+    required_tags: Optional[tuple] = None  # Changed from List[Dict] to tuple for hashability
+    safety_considerations: Optional[tuple] = None  # Changed from List[str] to tuple for hashability
+    performance_notes: Optional[tuple] = None  # Changed from List[str] to tuple for hashability
 
 class WarehouseAutomationPatterns:
     """Library of common warehouse automation patterns"""
@@ -37,7 +37,7 @@ class WarehouseAutomationPatterns:
         patterns['conveyor_control'] = WarehousePattern(
             name="Conveyor Control System",
             description="Basic conveyor with start/stop, jam detection, and speed control",
-            components=['motor_starter', 'photoeye_upstream', 'photoeye_downstream', 'jam_timer', 'speed_reference'],
+            components=('motor_starter', 'photoeye_upstream', 'photoeye_downstream', 'jam_timer', 'speed_reference'),
             ladder_logic_template="""
 // Conveyor Start/Stop Logic
 XIC(CONV_START_PB) XIO(CONV_STOP_PB) XIO(CONV_JAM) XIO(CONV_FAULT) OTE(CONV_RUN);
@@ -54,7 +54,7 @@ XIC(CONV_RESET_PB) RES(JAM_TIMER);
 // Speed Control (if VFD present)
 XIC(CONV_RUN) MOV(CONV_SPEED_REF,VFD_SPEED_CMD);
 """,
-            required_tags=[
+            required_tags=(
                 {'name': 'CONV_START_PB', 'data_type': 'BOOL', 'description': 'Conveyor start pushbutton'},
                 {'name': 'CONV_STOP_PB', 'data_type': 'BOOL', 'description': 'Conveyor stop pushbutton'},
                 {'name': 'CONV_RESET_PB', 'data_type': 'BOOL', 'description': 'Conveyor reset pushbutton'},
@@ -67,19 +67,19 @@ XIC(CONV_RUN) MOV(CONV_SPEED_REF,VFD_SPEED_CMD);
                 {'name': 'JAM_TIMER', 'data_type': 'TIMER', 'description': 'Jam detection timer'},
                 {'name': 'CONV_SPEED_REF', 'data_type': 'REAL', 'description': 'Conveyor speed reference'},
                 {'name': 'VFD_SPEED_CMD', 'data_type': 'REAL', 'description': 'VFD speed command'}
-            ],
-            safety_considerations=[
+            ),
+            safety_considerations=(
                 "Emergency stop must immediately stop conveyor",
                 "Jam detection prevents material damage",
                 "Guard switches should interlock motor operation"
-            ]
+            )
         )
         
         # Sorting System Pattern
         patterns['sorting_system'] = WarehousePattern(
             name="Package Sorting System",
             description="Automated sorting with barcode scanning and diverter control",
-            components=['barcode_scanner', 'diverter_cylinder', 'confirmation_photoeye', 'reject_chute'],
+            components=('barcode_scanner', 'diverter_cylinder', 'confirmation_photoeye', 'reject_chute'),
             ladder_logic_template="""
 // Scan Trigger Logic
 XIC(SCAN_PHOTO) OSR(SCAN_TRIGGER);
@@ -104,7 +104,7 @@ XIC(RETRACT_TIMER_1.DN) RES(RETRACT_TIMER_1);
 XIC(CONFIRM_PHOTO_1) CTU(LANE_1_COUNT,9999);
 XIC(CONFIRM_PHOTO_2) CTU(LANE_2_COUNT,9999);
 """,
-            required_tags=[
+            required_tags=(
                 {'name': 'SCAN_PHOTO', 'data_type': 'BOOL', 'description': 'Scan trigger photoeye'},
                 {'name': 'SCAN_TRIGGER', 'data_type': 'BOOL', 'description': 'Scanner trigger one-shot'},
                 {'name': 'SCANNER_TRIGGER', 'data_type': 'BOOL', 'description': 'Scanner trigger output'},
@@ -122,14 +122,14 @@ XIC(CONFIRM_PHOTO_2) CTU(LANE_2_COUNT,9999);
                 {'name': 'RETRACT_TIMER_1', 'data_type': 'TIMER', 'description': 'Diverter retract timer'},
                 {'name': 'LANE_1_COUNT', 'data_type': 'COUNTER', 'description': 'Lane 1 package counter'},
                 {'name': 'LANE_2_COUNT', 'data_type': 'COUNTER', 'description': 'Lane 2 package counter'}
-            ]
+            )
         )
         
         # Palletizing System Pattern
         patterns['palletizing_system'] = WarehousePattern(
             name="Robotic Palletizing System",
             description="Automated palletizing with layer pattern control and safety interlocks",
-            components=['robot_controller', 'gripper', 'pallet_station', 'layer_counter', 'safety_scanner'],
+            components=('robot_controller', 'gripper', 'pallet_station', 'layer_counter', 'safety_scanner'),
             ladder_logic_template="""
 // System Ready Conditions
 XIC(ROBOT_READY) XIC(GRIPPER_READY) XIC(PALLET_PRESENT) XIC(SAFETY_OK) OTE(SYSTEM_READY);
@@ -161,7 +161,7 @@ XIC(NEW_PALLET_READY) RES(PALLET_COUNT);
 XIO(SAFETY_SCANNER) XIO(LIGHT_CURTAIN) OTE(SAFETY_FAULT);
 XIC(SAFETY_FAULT) OTU(SYSTEM_READY);
 """,
-            required_tags=[
+            required_tags=(
                 {'name': 'ROBOT_READY', 'data_type': 'BOOL', 'description': 'Robot system ready'},
                 {'name': 'GRIPPER_READY', 'data_type': 'BOOL', 'description': 'Gripper system ready'},
                 {'name': 'PALLET_PRESENT', 'data_type': 'BOOL', 'description': 'Pallet in position'},
@@ -173,20 +173,20 @@ XIC(SAFETY_FAULT) OTU(SYSTEM_READY);
                 {'name': 'LAYERS_PER_PALLET', 'data_type': 'DINT', 'description': 'Layers per pallet setpoint'},
                 {'name': 'LAYER_COUNT', 'data_type': 'COUNTER', 'description': 'Current layer package count'},
                 {'name': 'PALLET_COUNT', 'data_type': 'COUNTER', 'description': 'Current pallet layer count'}
-            ],
-            safety_considerations=[
+            ),
+            safety_considerations=(
                 "Safety scanner must stop robot motion immediately",
                 "Light curtains protect operator access areas", 
                 "Gripper must have positive feedback for open/closed states",
                 "Emergency stop accessible from all operator positions"
-            ]
+            )
         )
         
         # AGV Integration Pattern
         patterns['agv_integration'] = WarehousePattern(
             name="AGV Integration System",
             description="Automated Guided Vehicle integration with warehouse systems",
-            components=['agv_controller', 'docking_station', 'load_sensors', 'traffic_control'],
+            components=('agv_controller', 'docking_station', 'load_sensors', 'traffic_control'),
             ladder_logic_template="""
 // AGV Request Handling
 XIC(AGV_REQUEST) XIC(STATION_AVAILABLE) OTE(AGV_APPROVED);
@@ -219,7 +219,7 @@ XIC(RELEASE_AGV) OTU(STATION_RESERVED);
 XIC(AGV_IN_ZONE_1) OTE(ZONE_1_OCCUPIED);
 XIC(ZONE_1_OCCUPIED) OTU(ZONE_1_CLEAR_FOR_ENTRY);
 """,
-            required_tags=[
+            required_tags=(
                 {'name': 'AGV_REQUEST', 'data_type': 'BOOL', 'description': 'AGV requests station access'},
                 {'name': 'STATION_AVAILABLE', 'data_type': 'BOOL', 'description': 'Station available for AGV'},
                 {'name': 'AGV_APPROVED', 'data_type': 'BOOL', 'description': 'AGV access approved'},
@@ -231,14 +231,14 @@ XIC(ZONE_1_OCCUPIED) OTU(ZONE_1_CLEAR_FOR_ENTRY);
                 {'name': 'AGV_TO_CONVEYOR', 'data_type': 'BOOL', 'description': 'Transfer direction: AGV to conv'},
                 {'name': 'LOAD_SENSORS_AGV', 'data_type': 'BOOL', 'description': 'Load present on AGV'},
                 {'name': 'LOAD_SENSORS_CONV', 'data_type': 'BOOL', 'description': 'Load present on conveyor'}
-            ]
+            )
         )
         
         # Safety Interlock Pattern
         patterns['safety_interlock'] = WarehousePattern(
             name="Comprehensive Safety Interlock System",
             description="Multi-level safety system with emergency stops, light curtains, and guard monitoring",
-            components=['emergency_stops', 'light_curtains', 'guard_switches', 'safety_relays'],
+            components=('emergency_stops', 'light_curtains', 'guard_switches', 'safety_relays'),
             ladder_logic_template="""
 // Emergency Stop Chain (Category 3/4 Safety)
 XIC(E_STOP_1_OK) XIC(E_STOP_2_OK) XIC(E_STOP_3_OK) XIC(E_STOP_RESET) OTE(E_STOP_CHAIN_OK);
@@ -269,7 +269,7 @@ XIC(SAFETY_OK) XIO(SAFETY_FAULT_LATCH) OTE(EQUIPMENT_ENABLE);
 XIC(E_STOP_1_FAULT) XIC(E_STOP_2_FAULT) XIC(E_STOP_3_FAULT) OTE(E_STOP_DIAGNOSTIC_FAULT);
 XIC(GUARD_1_FAULT) XIC(GUARD_2_FAULT) XIC(GUARD_3_FAULT) OTE(GUARD_DIAGNOSTIC_FAULT);
 """,
-            required_tags=[
+            required_tags=(
                 {'name': 'E_STOP_1_OK', 'data_type': 'BOOL', 'description': 'Emergency stop 1 OK status'},
                 {'name': 'E_STOP_2_OK', 'data_type': 'BOOL', 'description': 'Emergency stop 2 OK status'},
                 {'name': 'E_STOP_3_OK', 'data_type': 'BOOL', 'description': 'Emergency stop 3 OK status'},
@@ -283,14 +283,14 @@ XIC(GUARD_1_FAULT) XIC(GUARD_2_FAULT) XIC(GUARD_3_FAULT) OTE(GUARD_DIAGNOSTIC_FA
                 {'name': 'SAFETY_MAT_2', 'data_type': 'BOOL', 'description': 'Safety mat 2 activated'},
                 {'name': 'SAFETY_OK', 'data_type': 'BOOL', 'description': 'Master safety OK status'},
                 {'name': 'EQUIPMENT_ENABLE', 'data_type': 'BOOL', 'description': 'Equipment operation enable'}
-            ],
-            safety_considerations=[
+            ),
+            safety_considerations=(
                 "Complies with ISO 13849 Category 3/4 requirements",
                 "Dual channel monitoring for critical functions",
                 "Positive feedback required for all safety devices",
                 "Manual reset required after safety fault",
                 "Diagnostic monitoring for safety device health"
-            ]
+            )
         )
         
         return patterns
