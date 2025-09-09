@@ -14,5 +14,10 @@ sentence-transformers==2.7.0
 faiss-cpu>=1.7.0
 numpy<2.0.0
 
+# PDF parsing and analysis for technical drawings
+PyMuPDF>=1.26.0
+pdfplumber>=0.11.0
+PyPDF2>=3.0.0
+
 # Note: Studio 5000 SDK requires Python 3.12 and is installed separately
 # The SDK is located at: C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python

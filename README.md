@@ -98,6 +98,13 @@ python src/mcp_server/studio5000_mcp_server.py --test
 - **Pattern Recognition**: Understands conveyor control, encoder logic, fault handling, and timer patterns
 - **FAISS Vector Database**: Lightning-fast semantic search with embedding-based similarity
 
+### **📐 Technical Drawing Analysis**
+- **PDF Engineering Drawings**: Extract and search through technical drawings (P&IDs, electrical schematics, control logic diagrams)
+- **AutoCAD Integration**: Parse CAD-generated PDFs with rich text and vector graphics content
+- **Equipment Context**: Automatically find drawings referenced by equipment tags and system components
+- **Vision AI Enhancement**: Advanced analysis of complex technical diagrams and equipment connections
+- **Cross-Reference Capability**: Link drawings with existing L5X code and tag databases for complete system understanding
+
 ### **📊 Advanced L5X Analysis System**
 - **Real Production Testing**: Verified with actual 2.9MB L5X files from industrial systems
 - **Complexity Scoring**: Automatic assessment of routine complexity and refactoring needs
@@ -474,6 +481,34 @@ Once configured, these powerful tools will be available in your AI conversations
 
 **Output**: Detailed SDK operation information with examples and parameters
 
+### 📐 **PDF Technical Drawing Tools**
+
+#### 16. Index PDF Drawings
+**Tool**: `index_pdf_drawings`
+**Parameters**:
+- `pdf_file_path` (string): Path to technical drawings PDF file
+- `force_rebuild` (boolean): Force re-indexing of existing cache
+- `use_vision_ai` (boolean): Enable advanced vision AI analysis
+
+**Features**: Process and index technical PDF drawings for semantic search
+
+#### 17. Search Technical Drawings
+**Tool**: `search_drawings`
+**Parameters**:
+- `query` (string): Natural language search query (e.g., "motor M001 electrical connections")
+- `drawing_type_filter` (optional string): Filter by type (electrical, pid, logic, io_list)
+- `equipment_filter` (optional string): Filter by equipment tag
+
+**Output**: Ranked search results with drawing context and page references
+
+#### 18. Find Equipment Context
+**Tool**: `find_equipment_context`
+**Parameters**:
+- `equipment_tag` (string): Equipment identifier (e.g., "M001", "CV-001")
+- `context_type` (optional string): Type of context needed (electrical, process, safety)
+
+**Features**: Find all drawings and documentation related to specific equipment
+
 ## 🎯 **Three Powerful Approaches for PLC Project Creation**
 
 Your MCP server supports **THREE different approaches** for PLC project creation, each optimized for different use cases:
@@ -584,6 +619,14 @@ Once the MCP server is configured, you can ask questions and generate code like:
 - *"What are all the available SDK methods for tag manipulation?"*
 - *"Show me examples of using the Studio 5000 SDK for project creation"*
 - *"Find SDK operations related to routine analysis and modification"*
+
+### **📐 Technical Drawing Analysis Examples**
+- *"Index the technical drawings PDF for my Amazon conveyor system project"*
+- *"Find all electrical connections for motor M001 in the drawings"*
+- *"Show me the P&ID diagrams related to conveyor CV-001"*
+- *"What safety interlocks are shown for the divert gates in the drawings?"*
+- *"Find the control logic diagrams for the sorter tracking system"*
+- *"Search drawings for jam detection sensor wiring and connections"*
 
 ### **🏭 Real-World Applications**
 - *"Generate ladder logic for a car wash system with 5 sequential steps"*

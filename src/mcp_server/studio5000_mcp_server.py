@@ -28,6 +28,7 @@ from sdk_interface.studio5000_sdk import studio5000_sdk
 from sdk_documentation.mcp_sdk_integration import SDKMCPIntegration, SDKMCPTools
 from documentation.instruction_mcp_integration import InstructionMCPIntegration, InstructionMCPTools
 from l5x_analyzer.l5x_mcp_integration import L5XSDKMCPIntegration, L5XMCPTools
+from drawings_analyzer.pdf_mcp_integration import PDFMCPIntegration, PDFMCPTools
 
 # MCP imports (we'll implement a simplified version)
 class MCPServer:
@@ -266,6 +267,10 @@ class Studio5000MCPServer:
         # Initialize L5X analyzer system for production-scale L5X files
         self.l5x_integration = L5XSDKMCPIntegration()
         self.l5x_tools = L5XMCPTools
+        
+        # Initialize PDF drawings analyzer system
+        self.pdf_integration = PDFMCPIntegration()
+        self.pdf_tools = PDFMCPTools
         
         # Initialize and index the documentation
         self._initialize()
@@ -544,6 +549,37 @@ class Studio5000MCPServer:
             "get_project_overview",
             "Get comprehensive overview of project structure",
             self.get_project_overview
+        )
+        
+        # Add PDF drawings tools
+        self.server.add_tool(
+            "index_pdf_drawings",
+            "Index PDF technical drawings file for semantic search",
+            self.index_pdf_drawings
+        )
+        
+        self.server.add_tool(
+            "search_drawings",
+            "Search technical drawings using natural language",
+            self.search_drawings
+        )
+        
+        self.server.add_tool(
+            "find_equipment_context",
+            "Find all drawings and context related to specific equipment",
+            self.find_equipment_context
+        )
+        
+        self.server.add_tool(
+            "get_drawing_details",
+            "Get detailed information about a specific drawing",
+            self.get_drawing_details
+        )
+        
+        self.server.add_tool(
+            "get_equipment_connections",
+            "Get electrical connections and wiring info for equipment",
+            self.get_equipment_connections
         )
     
     async def search_instructions(self, query: str, category: Optional[str] = None) -> List[Dict]:
@@ -1110,6 +1146,35 @@ class Studio5000MCPServer:
     async def get_project_overview(self, acd_path: str) -> Dict[str, Any]:
         """Get comprehensive overview of project structure"""
         return await self.l5x_integration.get_project_overview(acd_path)
+    
+    # PDF Drawings Tool Handlers
+    async def index_pdf_drawings(self, pdf_file_path: str, force_rebuild: bool = False, 
+                               use_vision_ai: bool = False, max_pages: Optional[int] = None) -> Dict[str, Any]:
+        """Index PDF technical drawings file for semantic search"""
+        return await self.pdf_integration.index_pdf_drawings(
+            pdf_file_path, force_rebuild, use_vision_ai, max_pages
+        )
+    
+    async def search_drawings(self, query: str, limit: int = 10, score_threshold: float = 0.3,
+                            drawing_type_filter: Optional[str] = None, 
+                            equipment_filter: Optional[str] = None) -> Dict[str, Any]:
+        """Search technical drawings using natural language"""
+        return await self.pdf_integration.search_drawings(
+            query, limit, score_threshold, drawing_type_filter, equipment_filter
+        )
+    
+    async def find_equipment_context(self, equipment_tag: str, context_type: Optional[str] = None) -> Dict[str, Any]:
+        """Find all drawings and context related to specific equipment"""
+        return await self.pdf_integration.find_equipment_context(equipment_tag, context_type)
+    
+    async def get_drawing_details(self, drawing_number: Optional[str] = None, 
+                                page_number: Optional[int] = None) -> Dict[str, Any]:
+        """Get detailed information about a specific drawing"""
+        return await self.pdf_integration.get_drawing_details(drawing_number, page_number)
+    
+    async def get_equipment_connections(self, equipment_tag: str) -> Dict[str, Any]:
+        """Get electrical connections and wiring info for equipment"""
+        return await self.pdf_integration.get_equipment_connections(equipment_tag)
 
 # JSON-RPC 2.0 MCP Protocol Implementation
 async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Optional[Dict]:
@@ -1323,6 +1388,42 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
                     'acd_path': {'type': 'string', 'description': 'Path to ACD/L5K file'}
                 }
                 required = ['acd_path']
+            
+            # PDF Drawings Tool Parameters
+            elif name == 'index_pdf_drawings':
+                properties = {
+                    'pdf_file_path': {'type': 'string', 'description': 'Path to PDF file containing technical drawings'},
+                    'force_rebuild': {'type': 'boolean', 'description': 'Force re-indexing even if cached (default: false)'},
+                    'use_vision_ai': {'type': 'boolean', 'description': 'Enable advanced vision AI analysis (default: false)'},
+                    'max_pages': {'type': 'integer', 'description': 'Limit processing to first N pages for testing (optional)'}
+                }
+                required = ['pdf_file_path']
+            elif name == 'search_drawings':
+                properties = {
+                    'query': {'type': 'string', 'description': 'Natural language search query'},
+                    'limit': {'type': 'integer', 'description': 'Maximum number of results (default: 10)'},
+                    'score_threshold': {'type': 'number', 'description': 'Minimum relevance score 0.0-1.0 (default: 0.3)'},
+                    'drawing_type_filter': {'type': 'string', 'description': 'Filter by type: electrical, pid, layout, control_logic, etc.'},
+                    'equipment_filter': {'type': 'string', 'description': 'Filter by equipment tag'}
+                }
+                required = ['query']
+            elif name == 'find_equipment_context':
+                properties = {
+                    'equipment_tag': {'type': 'string', 'description': 'Equipment identifier (e.g., MCM01, PDP01, M001)'},
+                    'context_type': {'type': 'string', 'description': 'Context type: electrical, process, safety, control (optional)'}
+                }
+                required = ['equipment_tag']
+            elif name == 'get_drawing_details':
+                properties = {
+                    'drawing_number': {'type': 'string', 'description': 'Drawing reference number (optional)'},
+                    'page_number': {'type': 'integer', 'description': 'Page number to retrieve (optional)'}
+                }
+                required = []  # At least one parameter required, but handled in logic
+            elif name == 'get_equipment_connections':
+                properties = {
+                    'equipment_tag': {'type': 'string', 'description': 'Equipment identifier to find connections for'}
+                }
+                required = ['equipment_tag']
             
             tools.append({
                 'name': name,
