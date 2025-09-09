@@ -45,11 +45,11 @@ Create a dedicated folder for each project following this proven structure:
 ### **Phase 1: Project Setup and Export** 📤
 
 #### **1.1 Export Your ACD File**
-```bash
+
 # Place your main .ACD file in the project folder
 📁 Project_Folder/
 └── 📄 YourProject.ACD
-```
+You can just drag and drop your .ACD file into the project folder.
 
 #### **1.2 Export Individual Routines**
 In Studio 5000:
@@ -65,6 +65,13 @@ In Studio 5000:
 3. **Save as** `ProjectName_Tags.CSV` in project folder
 
 ---
+
+### **Phase 1.5 Routine Indexing**
+Ask the AI to index the exported L5X files:
+It should create a vector database of the exported L5X files. Allowing for semantic search of the exported L5X files.
+
+
+This is especially useful for large projects with many routines where the routines themselves are also large and complex.
 
 ### **Phase 2: AI-Powered Development** 🤖
 
@@ -97,6 +104,9 @@ Document your findings in markdown files:
 ### **Phase 3: Automated Fix Scripts** 🔧
 
 Create Python scripts for common fixes (like your examples):
+This is optional, but sometimes the AI will generate code that is not correct and you will need to fix it. The AI can generate these scripts for you. It can use sdk and regular docs documentation to help it fix the code.
+
+Examples:
 
 #### **3.1 Camera Signal Fix Script** 
 ```python
@@ -136,15 +146,13 @@ def fix_array_references(l5x_file):
 1. **Open** Studio 5000 with your main .ACD file
 2. **Go to** File → Import
 3. **Select** your updated L5X routine files
-4. **Choose** what to import:
-   - ✅ **Routines** (your updated logic)
-   - ✅ **Tags** (if new tags were added)
-   - ⚠️ **Be selective** - don't overwrite existing project structure
 
 #### **4.2 Validation Process**
-1. **Compile** the project in Studio 5000
+1. **Compile** the project in Studio 5000 (happens automatically when you import the L5X files)
+    - if there are errors, you will need to fix them you can copy and paste the error messages to the AI to fix them.
 2. **Check** for errors in the Error List
 3. **If errors exist:**
+   - Use the validate feature in studio 5000 to get more detailed error messages
    - Copy error messages
    - Feed back to AI: *"Fix these Studio 5000 errors: [paste errors]"*
    - Get corrected L5X files  
@@ -161,11 +169,7 @@ def fix_array_references(l5x_file):
 *(New Feature - Gives AI Access to Real Devices)*
 
 #### **5.1 Create Tag Vector Database**
-```python
-# The AI can now access your actual tag database
-# This means it knows your real I/O, VFDs, encoders, etc.
-# No more generic tag names - it uses YOUR actual hardware!
-```
+Ask the AI to create a vector database of the tag database. This is especially useful for large projects with many tags.
 
 #### **5.2 Benefits of Vector Database:**
 - ✅ AI knows your **actual device names** (NCS1_1_VFD1, Local:5:I.DATA.10)
@@ -238,7 +242,7 @@ Result: Error checking and suggestions
 
 ### **Import Errors**
 **Problem:** "Tag not found" errors after import  
-**Solution:** Use fix_missing_tags.py script or ask AI: *"Add missing tags from my CSV file to this routine"*
+**Solution:** Use fix_missing_tags.py (you can generate this script) script or ask AI: *"Add missing tags from my CSV file to this routine"*
 
 ### **Array Syntax Issues**
 **Problem:** UDPE[1,Index] syntax errors  
@@ -286,7 +290,7 @@ Result: Error checking and suggestions
 
 ### **SDK Integration:**
 - Creates real .ACD project files using official Rockwell SDK
-- Generates complete projects with MainProgram, MainTask, and logic
+- Generates complete projects with MainProgram, MainTask, and logic (work in progress, only empty projects are reliable)
 - Professional-grade output that opens directly in Studio 5000
 
 ### **Documentation Database:**

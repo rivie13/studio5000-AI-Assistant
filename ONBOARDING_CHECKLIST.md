@@ -84,23 +84,8 @@
 - [ ] **Update** team guides with lessons learned
 - [ ] **Help** train future new team members
 
----
 
-## 📞 **Support Contacts**
 
-### **Technical Setup Issues:**
-- **Primary:** [Senior Engineer Name]
-- **Backup:** [Lead Programmer Name]  
-
-### **Studio 5000 Questions:**
-- **Primary:** [Controls Specialist Name]
-- **Backup:** [Project Lead Name]
-
-### **AI/MCP Usage:**
-- **Primary:** [AI Tool Champion Name]
-- **Backup:** Check team Slack channel #plc-automation
-
----
 
 ## ⏰ **Timeline Expectations**
 
