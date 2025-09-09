@@ -285,7 +285,7 @@ class L5XVectorDatabase:
         self._save_to_cache()
         logger.info("L5X vector database built and cached successfully")
     
-    def search_l5x_content(self, query: str, limit: int = 20, score_threshold: float = 0.3,
+    def search_l5x_content(self, query: str, limit: int = 20, score_threshold: float = 0.1,
                           chunk_types: List[L5XChunkType] = None) -> List[L5XSearchResult]:
         """
         Search L5X content using vector similarity
@@ -312,9 +312,9 @@ class L5XVectorDatabase:
             query_embedding = self.model.encode([query])
             faiss.normalize_L2(query_embedding)
             
-            # Search the index
-            scores, indices = self.index.search(query_embedding.astype(np.float32), 
-                                              min(limit * 2, len(self.chunks_data)))
+            # Search the index - get more results initially for better coverage
+            search_limit = min(limit * 5, len(self.chunks_data), 1000)  # Search more broadly
+            scores, indices = self.index.search(query_embedding.astype(np.float32), search_limit)
             
             results = []
             for score, idx in zip(scores[0], indices[0]):
@@ -493,7 +493,7 @@ class L5XVectorDatabase:
         return min(complexity, 10.0)  # Cap at 10
     
     def _text_search(self, query: str, limit: int, chunk_types: List[L5XChunkType] = None) -> List[L5XSearchResult]:
-        """Fallback text-based search"""
+        """Enhanced fallback text-based search with fuzzy matching"""
         results = []
         query_lower = query.lower()
         
@@ -502,14 +502,40 @@ class L5XVectorDatabase:
                 continue
             
             searchable = chunk.searchable_text.lower()
+            name_lower = chunk.name.lower()
+            desc_lower = chunk.description.lower() if chunk.description else ""
             
-            # Simple text matching score
+            # Multi-level scoring for better matching
             score = 0.0
             query_words = query_lower.split()
-            for word in query_words:
-                if word in searchable:
-                    score += 1.0 / len(query_words)
             
+            # Exact phrase match (highest score)
+            if query_lower in searchable:
+                score += 2.0
+            
+            # Name contains query (high score)
+            if query_lower in name_lower:
+                score += 1.5
+                
+            # Description contains query
+            if query_lower in desc_lower:
+                score += 1.0
+            
+            # Individual word matching with partial support
+            word_matches = 0
+            for word in query_words:
+                if len(word) >= 3:  # Only check words with 3+ characters
+                    # Exact word match
+                    if word in searchable:
+                        word_matches += 1
+                    # Partial word match (for technical terms)
+                    elif any(word in search_word for search_word in searchable.split() if len(search_word) >= 4):
+                        word_matches += 0.5
+                        
+            if word_matches > 0:
+                score += word_matches / len(query_words)
+            
+            # Add small score for any match to ensure broad coverage
             if score > 0:
                 result = L5XSearchResult(
                     chunk_id=chunk.id,
@@ -526,6 +552,7 @@ class L5XVectorDatabase:
         
         # Sort by score and return top results
         results.sort(key=lambda x: x.score, reverse=True)
+        logger.info(f"Text search found {len(results)} results for query: {query}")
         return results[:limit]
     
     def _is_project_indexed(self, project_name: str) -> bool:
