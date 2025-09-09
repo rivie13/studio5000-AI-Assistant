@@ -82,13 +82,18 @@ class EnhancedLadderLogicGenerator:
     async def generate_from_requirements(self, requirements: EnhancedPLCRequirement) -> EnhancedGeneratedCode:
         """Generate enhanced ladder logic from structured requirements"""
         
-        # Find matching warehouse patterns
-        matching_patterns = self.warehouse_patterns.find_matching_patterns(requirements.description)
+        # First, check if this requires dynamic/mathematical logic generation
+        if self._requires_dynamic_generation(requirements):
+            return await self._generate_dynamic_logic(requirements)
         
-        if matching_patterns:
-            return await self._generate_from_patterns(requirements, matching_patterns)
-        else:
-            return await self._generate_custom_logic(requirements)
+        # Check for simple, well-defined patterns only if NOT complex
+        if requirements.complexity in ['simple', 'moderate']:
+            matching_patterns = self.warehouse_patterns.find_matching_patterns(requirements.description)
+            if matching_patterns and self._is_clear_pattern_match(requirements, matching_patterns):
+                return await self._generate_from_patterns(requirements, matching_patterns)
+        
+        # Default to custom logic generation for everything else
+        return await self._generate_custom_logic(requirements)
     
     async def _generate_from_patterns(self, requirements: EnhancedPLCRequirement, 
                                     patterns: List[WarehousePattern]) -> EnhancedGeneratedCode:
@@ -110,6 +115,71 @@ class EnhancedLadderLogicGenerator:
             self._optimize_for_performance(customized_logic, requirements.performance_requirements)
         
         return customized_logic
+    
+    def _requires_dynamic_generation(self, requirements: EnhancedPLCRequirement) -> bool:
+        """Determine if this specification requires dynamic logic generation"""
+        
+        description = requirements.description.lower()
+        
+        # Mathematical calculation indicators
+        math_indicators = [
+            'calculate', 'calculation', 'fire_position', 'lead_distance', 'spacing',
+            '+', '-', '*', '/', '=', 'add', 'subtract', 'multiply', 'divide'
+        ]
+        
+        # Dynamic addressing indicators  
+        dynamic_indicators = [
+            'solenoid_number', 'indexed', 'array', '[', ']', 'dynamic',
+            'position-based', 'based on', 'depending on'
+        ]
+        
+        # Complex conditional logic indicators
+        conditional_indicators = [
+            'if', 'when', 'then', 'else', 'package_length', 'package_direction',
+            'small package', 'medium package', 'large package', 'valve selection'
+        ]
+        
+        # Structured specification indicators (like yours)
+        structured_indicators = [
+            'rung 1:', 'rung 2:', 'step 1:', 'step 2:', 'specific dynamic logic',
+            'required:', 'logic required:'
+        ]
+        
+        # Count indicators of each type
+        math_count = sum(1 for indicator in math_indicators if indicator in description)
+        dynamic_count = sum(1 for indicator in dynamic_indicators if indicator in description)
+        conditional_count = sum(1 for indicator in conditional_indicators if indicator in description)
+        structured_count = sum(1 for indicator in structured_indicators if indicator in description)
+        
+        # Require dynamic generation if:
+        # - Multiple mathematical operations
+        # - Dynamic addressing/indexing
+        # - Complex conditional logic
+        # - Highly structured specification
+        # - Complexity is already marked as complex/advanced
+        
+        return (math_count >= 2 or 
+                dynamic_count >= 1 or 
+                conditional_count >= 3 or 
+                structured_count >= 1 or
+                requirements.complexity.value in ['complex', 'advanced'])
+    
+    def _is_clear_pattern_match(self, requirements: EnhancedPLCRequirement, 
+                              patterns: List[WarehousePattern]) -> bool:
+        """Determine if the pattern match is clear and appropriate"""
+        
+        # Don't use patterns for complex systems
+        if requirements.complexity.value in ['complex', 'advanced']:
+            return False
+            
+        # Don't use patterns if specification contains mathematical logic
+        if any(indicator in requirements.description.lower() 
+               for indicator in ['calculate', 'fire_position', 'solenoid_number', '=']):
+            return False
+            
+        # Only use patterns for simple, well-defined scenarios
+        simple_scenarios = ['basic conveyor', 'simple sorting', 'standard safety']
+        return any(scenario in requirements.description.lower() for scenario in simple_scenarios)
     
     def _select_best_pattern(self, requirements: EnhancedPLCRequirement, 
                            patterns: List[WarehousePattern]) -> WarehousePattern:
@@ -493,4 +563,333 @@ class EnhancedLadderLogicGenerator:
         output_types = ['motor', 'light', 'valve', 'cylinder', 'actuator', 'relay', 'contactor', 
                        'solenoid', 'output', 'alarm', 'horn', 'beacon', 'servo_motor', 'stepper_motor']
         return component.component_type in output_types
+    
+    async def _generate_dynamic_logic(self, requirements: EnhancedPLCRequirement) -> EnhancedGeneratedCode:
+        """Generate dynamic ladder logic by parsing and understanding the specification"""
+        
+        description = requirements.description
+        
+        # Parse mathematical relationships
+        math_logic = self._parse_mathematical_logic(description)
+        
+        # Parse conditional logic
+        conditional_logic = self._parse_conditional_logic(description)
+        
+        # Parse dynamic addressing/indexing
+        indexing_logic = self._parse_indexing_logic(description)
+        
+        # Parse tag requirements from specification
+        required_tags = self._extract_tags_from_specification(description)
+        
+        # Parse structured rungs if present
+        structured_rungs = self._parse_structured_rungs(description)
+        
+        # Combine all logic components
+        if structured_rungs:
+            # Use structured approach if rungs are explicitly defined
+            ladder_logic = structured_rungs
+        else:
+            # Build logic from parsed components
+            logic_sections = []
+            
+            if math_logic:
+                logic_sections.append("// Mathematical Calculations")
+                logic_sections.extend(math_logic)
+                logic_sections.append("")
+            
+            if conditional_logic:
+                logic_sections.append("// Conditional Logic")
+                logic_sections.extend(conditional_logic)
+                logic_sections.append("")
+            
+            if indexing_logic:
+                logic_sections.append("// Dynamic Indexing/Addressing")
+                logic_sections.extend(indexing_logic)
+                logic_sections.append("")
+            
+            ladder_logic = "\n".join(logic_sections)
+        
+        # Extract instructions used
+        instructions_used = self._extract_instructions_from_logic(ladder_logic)
+        
+        # Generate validation notes
+        validation_notes = []
+        if self.mcp_server:
+            validation_notes = await self._validate_instructions(instructions_used)
+        
+        return EnhancedGeneratedCode(
+            ladder_logic=ladder_logic,
+            tags=required_tags,
+            instructions_used=instructions_used,
+            comments=[f"Generated dynamic logic for: {description[:100]}..."],
+            validation_notes=validation_notes,
+            performance_metrics={"generation_method": "dynamic_parsing"},
+            documentation=f"Dynamically generated ladder logic based on complex specification analysis"
+        )
+    
+    def _parse_mathematical_logic(self, description: str) -> List[str]:
+        """Parse mathematical relationships from specification"""
+        
+        logic_lines = []
+        
+        # Common mathematical patterns in PLC specifications
+        patterns = {
+            r'Fire_Position\s*=\s*Package_Position_Current\s*\+\s*Lead_Distance_Inches': 
+                "ADD(Package_Position_Current,Lead_Distance_Inches,Fire_Position);",
+            r'Solenoid_Number\s*=\s*Fire_Position\s*/\s*([\d.]+)':
+                lambda m: f"DIV(Fire_Position,{m.group(1)},Solenoid_Number_Raw);",
+            r'Limit\s+Solenoid_Number\s+between\s+(\d+)\s+and\s+(\d+)':
+                lambda m: f"LIM({m.group(1)},Solenoid_Number_Raw,{m.group(2)},Solenoid_Number);"
+        }
+        
+        for pattern, instruction in patterns.items():
+            import re
+            matches = re.finditer(pattern, description, re.IGNORECASE)
+            for match in matches:
+                if callable(instruction):
+                    logic_lines.append(instruction(match))
+                else:
+                    logic_lines.append(instruction)
+        
+        return logic_lines
+    
+    def _parse_conditional_logic(self, description: str) -> List[str]:
+        """Parse conditional logic from specification"""
+        
+        logic_lines = []
+        
+        # Package size logic
+        if "Small Package" in description and "Package_Length < 12" in description:
+            logic_lines.append("LES(Package_Length,12.0,Small_Package);")
+        
+        if "Medium Package" in description and "12\" ≤ Package_Length < 24\"" in description:
+            logic_lines.append("GEQ(Package_Length,12.0) LES(Package_Length,24.0,Medium_Package);")
+        
+        if "Large Package" in description and "Package_Length ≥ 24\"" in description:
+            logic_lines.append("GEQ(Package_Length,24.0,Large_Package);")
+        
+        # Direction logic
+        if "Package_Direction = 1" in description and "LEFT" in description:
+            logic_lines.append("EQU(Package_Direction,1,Left_Direction);")
+        
+        if "Package_Direction = 2" in description and "RIGHT" in description:
+            logic_lines.append("EQU(Package_Direction,2,Right_Direction);")
+        
+        # Belt selection logic
+        if "Belt_Load_Balance_Select = 1" in description:
+            logic_lines.append("EQU(Belt_Load_Balance_Select,1,Use_S02_1_Series);")
+        
+        if "Belt_Load_Balance_Select = 2" in description:
+            logic_lines.append("EQU(Belt_Load_Balance_Select,2,Use_S02_2_Series);")
+        
+        return logic_lines
+    
+    def _parse_indexing_logic(self, description: str) -> List[str]:
+        """Parse dynamic indexing/addressing logic"""
+        
+        logic_lines = []
+        
+        # Look for indexed addressing patterns
+        import re
+        
+        # Pattern for S02_X_SOL[Solenoid_Number]:O.ProcessDataOut.Valve_X_solenoid_14
+        indexed_patterns = re.findall(r'S02_[X12]_SOL\[([^\]]+)\]:[^.]+\.([^.]+)\.([^.\s]+)', description)
+        
+        if indexed_patterns:
+            # Add master firing control
+            conditions = []
+            if "Package_Divert_Active" in description:
+                conditions.append("Package_Divert_Active")
+            if "Package_In_Fire_Zone" in description:
+                conditions.append("Package_In_Fire_Zone")
+            if "Package_Direction_Valid" in description:
+                conditions.append("Package_Direction_Valid")
+            if "Package_Type_Valid" in description:
+                conditions.append("Package_Type_Valid")
+            
+            if conditions:
+                condition_str = " XIC(".join([""] + conditions) + ")"
+                logic_lines.append(f"{condition_str} OTE(Fire_Enable);")
+        
+        # Add specific valve firing logic based on package types
+        valve_patterns = {
+            "Small Left Package": ["Valve_3_solenoid_14", "Valve_5_solenoid_14"],
+            "Small Right Package": ["Valve_4_solenoid_14", "Valve_6_solenoid_14"],
+            "Medium Left Package": ["Valve_3_solenoid_14", "Valve_5_solenoid_14", "Valve_7_solenoid_14"],
+            "Medium Right Package": ["Valve_2_solenoid_14", "Valve_4_solenoid_14", "Valve_6_solenoid_14"],
+            "Large Left Package": ["Valve_1_solenoid_14", "Valve_3_solenoid_14", "Valve_5_solenoid_14", "Valve_7_solenoid_14"],
+            "Large Right Package": ["Valve_2_solenoid_14", "Valve_4_solenoid_14", "Valve_6_solenoid_14", "Valve_8_solenoid_14"]
+        }
+        
+        for package_type, valves in valve_patterns.items():
+            if package_type in description:
+                package_condition = package_type.lower().replace(" ", "_")
+                for valve in valves:
+                    logic_lines.append(f"XIC(Fire_Enable) XIC({package_condition}) OTE(S02_X_SOL[Solenoid_Number]:O.ProcessDataOut.{valve});")
+        
+        return logic_lines
+    
+    def _parse_structured_rungs(self, description: str) -> str:
+        """Parse explicitly structured rungs from specification"""
+        
+        import re
+        
+        # Look for structured rung specifications
+        rung_pattern = r'RUNG\s+(\d+):\s*([^R]+?)(?=RUNG\s+\d+:|$)'
+        rungs = re.findall(rung_pattern, description, re.IGNORECASE | re.DOTALL)
+        
+        if not rungs:
+            return ""
+        
+        rung_logic = []
+        for rung_num, rung_content in rungs:
+            rung_content = rung_content.strip()
+            
+            # Add comment for the rung
+            rung_logic.append(f"// RUNG {rung_num}: {rung_content[:60]}...")
+            
+            # Parse the rung content and convert to ladder logic
+            if "Position-Based Solenoid Selection" in rung_content:
+                rung_logic.extend(self._parse_mathematical_logic(rung_content))
+            elif "Package Length-Based Valve Selection" in rung_content:
+                rung_logic.extend(self._parse_conditional_logic(rung_content))
+            elif "Direction-Based Valve Control" in rung_content:
+                rung_logic.extend(self._parse_conditional_logic(rung_content))
+            elif "Dynamic Valve Firing" in rung_content:
+                rung_logic.extend(self._parse_indexing_logic(rung_content))
+            elif "Master Firing Control" in rung_content:
+                conditions = ["Package_Divert_Active", "Package_In_Fire_Zone", 
+                            "Package_Direction_Valid", "Package_Type_Valid"]
+                condition_str = " XIC(".join([""] + conditions) + ")"
+                rung_logic.append(f"{condition_str} OTE(Fire_Enable);")
+            
+            rung_logic.append("")  # Blank line between rungs
+        
+        return "\n".join(rung_logic)
+    
+    def _extract_tags_from_specification(self, description: str) -> List[Dict]:
+        """Extract tag definitions from specification text"""
+        
+        tags = []
+        
+        # Look for explicit tag definitions
+        import re
+        
+        tag_patterns = {
+            r'Package_Position_Current\s*\(([^)]+)\)': ('Package_Position_Current', 'REAL', 'Current package position'),
+            r'Package_Length\s*\(([^)]+)\)': ('Package_Length', 'REAL', 'Package length measurement'),
+            r'Package_Direction\s*\(([^)]+)\)': ('Package_Direction', 'INT', 'Package direction (1=LEFT, 2=RIGHT)'),
+            r'Lead_Distance_Inches\s*\(([^)]+)\)': ('Lead_Distance_Inches', 'REAL', 'Lead distance in inches'),
+            r'Solenoid_Number\s*\(([^)]+)\)': ('Solenoid_Number', 'INT', 'Calculated solenoid number'),
+            r'Belt_Load_Balance_Select\s*\(([^)]+)\)': ('Belt_Load_Balance_Select', 'INT', 'Belt selection (1 or 2)'),
+            r'Package_Divert_Active\s*\(([^)]+)\)': ('Package_Divert_Active', 'BOOL', 'Package diversion active'),
+            r'Package_In_Fire_Zone\s*\(([^)]+)\)': ('Package_In_Fire_Zone', 'BOOL', 'Package in firing zone'),
+            r'Package_Direction_Valid\s*\(([^)]+)\)': ('Package_Direction_Valid', 'BOOL', 'Package direction is valid'),
+            r'Package_Type_Valid\s*\(([^)]+)\)': ('Package_Type_Valid', 'BOOL', 'Package type is valid')
+        }
+        
+        for pattern, (name, data_type, desc) in tag_patterns.items():
+            if re.search(pattern, description):
+                tags.append({
+                    'name': name,
+                    'data_type': data_type,
+                    'description': desc
+                })
+        
+        # Add calculated/intermediate tags
+        if "Fire_Position" in description:
+            tags.append({
+                'name': 'Fire_Position',
+                'data_type': 'REAL',
+                'description': 'Calculated firing position'
+            })
+        
+        if "Solenoid_Number_Raw" in description or "LIM(" in description:
+            tags.append({
+                'name': 'Solenoid_Number_Raw',
+                'data_type': 'REAL',
+                'description': 'Raw solenoid number before limiting'
+            })
+        
+        # Add package type tags
+        package_types = ['Small_Package', 'Medium_Package', 'Large_Package', 'Left_Direction', 'Right_Direction']
+        for pkg_type in package_types:
+            if pkg_type.lower() in description.lower():
+                tags.append({
+                    'name': pkg_type,
+                    'data_type': 'BOOL',
+                    'description': f'{pkg_type.replace("_", " ")} condition'
+                })
+        
+        return tags
+    
+    async def _generate_custom_logic(self, requirements: EnhancedPLCRequirement) -> EnhancedGeneratedCode:
+        """Generate custom ladder logic for requirements that don't match patterns"""
+        
+        # This is a fallback method for completely custom logic
+        # For now, provide a basic structure that can be enhanced
+        
+        ladder_logic = f"""// Custom Logic Generated for: {requirements.description[:60]}...
+
+// Basic System Ready Logic
+XIC(SYSTEM_ENABLE) XIO(SYSTEM_FAULT) OTE(SYSTEM_READY);
+
+// Custom Logic Section
+// TODO: Implement specific logic based on requirements
+NOP();
+
+// System Status
+XIC(SYSTEM_READY) OTE(STATUS_READY);"""
+        
+        # Basic tags for custom logic
+        tags = [
+            {'name': 'SYSTEM_ENABLE', 'data_type': 'BOOL', 'description': 'System enable input'},
+            {'name': 'SYSTEM_FAULT', 'data_type': 'BOOL', 'description': 'System fault status'},
+            {'name': 'SYSTEM_READY', 'data_type': 'BOOL', 'description': 'System ready output'},
+            {'name': 'STATUS_READY', 'data_type': 'BOOL', 'description': 'Status indicator'}
+        ]
+        
+        instructions_used = ['XIC', 'XIO', 'OTE', 'NOP']
+        
+        return EnhancedGeneratedCode(
+            ladder_logic=ladder_logic,
+            tags=tags,
+            instructions_used=instructions_used,
+            comments=[f"Custom logic structure for: {requirements.description[:100]}..."],
+            validation_notes=["Custom logic requires manual review and implementation"],
+            performance_metrics={"generation_method": "custom_fallback"},
+            documentation="Basic custom logic structure - requires manual enhancement"
+        )
+    
+    def _extract_instructions_from_logic(self, ladder_logic: str) -> List[str]:
+        """Extract PLC instructions from ladder logic code"""
+        
+        import re
+        
+        # Common PLC instruction patterns
+        instruction_pattern = r'\b([A-Z]{2,4})\s*\('
+        
+        matches = re.findall(instruction_pattern, ladder_logic)
+        
+        # Remove duplicates and return sorted list
+        return sorted(list(set(matches)))
+    
+    async def _validate_instructions(self, instructions: List[str]) -> List[str]:
+        """Validate instructions using MCP server"""
+        
+        validation_notes = []
+        
+        for instruction in instructions:
+            try:
+                if hasattr(self.mcp_server, 'get_instruction'):
+                    inst_info = await self.mcp_server.get_instruction(instruction)
+                    if inst_info:
+                        validation_notes.append(f"✓ {instruction} instruction validated")
+                    else:
+                        validation_notes.append(f"⚠ {instruction} instruction not found in documentation")
+                
+            except Exception as e:
+                validation_notes.append(f"❌ {instruction}: Validation error - {str(e)}")
+        
+        return validation_notes
 

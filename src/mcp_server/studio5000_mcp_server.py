@@ -29,6 +29,7 @@ from sdk_documentation.mcp_sdk_integration import SDKMCPIntegration, SDKMCPTools
 from documentation.instruction_mcp_integration import InstructionMCPIntegration, InstructionMCPTools
 from l5x_analyzer.l5x_mcp_integration import L5XSDKMCPIntegration, L5XMCPTools
 from drawings_analyzer.pdf_mcp_integration import PDFMCPIntegration, PDFMCPTools
+from tag_analyzer.tag_mcp_integration import TagMCPIntegration, TagMCPTools
 
 # MCP imports (we'll implement a simplified version)
 class MCPServer:
@@ -272,6 +273,10 @@ class Studio5000MCPServer:
         self.pdf_integration = PDFMCPIntegration()
         self.pdf_tools = PDFMCPTools
         
+        # Initialize tag analyzer system for Studio 5000 tag CSV files
+        self.tag_integration = TagMCPIntegration()
+        self.tag_tools = TagMCPTools
+        
         # Initialize and index the documentation
         self._initialize()
     
@@ -390,6 +395,33 @@ class Studio5000MCPServer:
             import traceback
             traceback.print_exc(file=sys.stderr)
             print("L5X analyzer features may be limited", file=sys.stderr)
+        
+        # Initialize Tag analyzer system - lightweight initialization
+        print("Initializing Tag analyzer system...", file=sys.stderr)
+        try:
+            # Use threading for async initialization like the others
+            def run_async_tag_init():
+                """Run async Tag initialization in a new event loop in a thread"""
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    new_loop.run_until_complete(
+                        self.tag_integration.initialize(force_rebuild=False)
+                    )
+                finally:
+                    new_loop.close()
+            
+            tag_init_thread = threading.Thread(target=run_async_tag_init)
+            tag_init_thread.start()
+            tag_init_thread.join()  # Wait for completion
+            
+            print("✅ Tag analyzer system initialized successfully!", file=sys.stderr)
+            
+        except Exception as e:
+            print(f"❌ Failed to initialize Tag analyzer: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            print("Tag analyzer features may be limited", file=sys.stderr)
         
         # Register tools
         self.server.add_tool(
@@ -580,6 +612,73 @@ class Studio5000MCPServer:
             "get_equipment_connections",
             "Get electrical connections and wiring info for equipment",
             self.get_equipment_connections
+        )
+        
+        # Add tag analyzer tools for Studio 5000 tag CSV files
+        self.server.add_tool(
+            "index_tag_csv",
+            "Index Studio 5000 tag CSV export for semantic search",
+            self.index_tag_csv
+        )
+        
+        self.server.add_tool(
+            "search_tags",
+            "Search through indexed tags using natural language",
+            self.search_tags
+        )
+        
+        self.server.add_tool(
+            "find_device",
+            "Find specific devices by description or function",
+            self.find_device
+        )
+        
+        self.server.add_tool(
+            "get_module_tags",
+            "Get all tags for a specific module (rack/slot)",
+            self.get_module_tags
+        )
+        
+        self.server.add_tool(
+            "find_i_o_point",
+            "Find specific I/O points by address or description",
+            self.find_i_o_point
+        )
+        
+        self.server.add_tool(
+            "analyze_i_o_usage",
+            "Analyze I/O usage and capacity across the system",
+            self.analyze_i_o_usage
+        )
+        
+        self.server.add_tool(
+            "find_related_tags",
+            "Find tags related to a given tag",
+            self.find_related_tags
+        )
+        
+        self.server.add_tool(
+            "get_device_overview",
+            "Get comprehensive overview of devices in the system",
+            self.get_device_overview
+        )
+        
+        self.server.add_tool(
+            "get_safety_tags",
+            "Get all safety-related tags",
+            self.get_safety_tags
+        )
+        
+        self.server.add_tool(
+            "get_motor_tags",
+            "Get all motor control tags",
+            self.get_motor_tags
+        )
+        
+        self.server.add_tool(
+            "get_sensor_tags",
+            "Get all sensor tags",
+            self.get_sensor_tags
         )
     
     async def search_instructions(self, query: str, category: Optional[str] = None) -> List[Dict]:
@@ -1175,6 +1274,52 @@ class Studio5000MCPServer:
     async def get_equipment_connections(self, equipment_tag: str) -> Dict[str, Any]:
         """Get electrical connections and wiring info for equipment"""
         return await self.pdf_integration.get_equipment_connections(equipment_tag)
+    
+    # Tag Analyzer Tool Handlers
+    async def index_tag_csv(self, csv_path: str, force_rebuild: bool = False) -> Dict[str, Any]:
+        """Index Studio 5000 tag CSV export for semantic search"""
+        return await self.tag_integration.index_tag_csv(csv_path, force_rebuild)
+    
+    async def search_tags(self, query: str, category_filter: str = None, 
+                         chunk_type_filter: str = None, limit: int = 20) -> Dict[str, Any]:
+        """Search through indexed tags using natural language"""
+        return await self.tag_integration.search_tags(query, category_filter, chunk_type_filter, limit)
+    
+    async def find_device(self, device_description: str, device_type: str = None) -> Dict[str, Any]:
+        """Find specific devices by description or function"""
+        return await self.tag_integration.find_device(device_description, device_type)
+    
+    async def get_module_tags(self, rack: int, slot: int) -> Dict[str, Any]:
+        """Get all tags for a specific module (rack/slot)"""
+        return await self.tag_integration.get_module_tags(rack, slot)
+    
+    async def find_i_o_point(self, address_pattern: str = None, description: str = None) -> Dict[str, Any]:
+        """Find specific I/O points by address or description"""
+        return await self.tag_integration.find_i_o_point(address_pattern, description)
+    
+    async def analyze_i_o_usage(self) -> Dict[str, Any]:
+        """Analyze I/O usage and capacity across the system"""
+        return await self.tag_integration.analyze_i_o_usage()
+    
+    async def find_related_tags(self, tag_name: str, relationship_type: str = "all") -> Dict[str, Any]:
+        """Find tags related to a given tag"""
+        return await self.tag_integration.find_related_tags(tag_name, relationship_type)
+    
+    async def get_device_overview(self, category_filter: str = None) -> Dict[str, Any]:
+        """Get comprehensive overview of devices in the system"""
+        return await self.tag_integration.get_device_overview(category_filter)
+    
+    async def get_safety_tags(self) -> Dict[str, Any]:
+        """Get all safety-related tags"""
+        return await self.tag_integration.get_safety_tags()
+    
+    async def get_motor_tags(self) -> Dict[str, Any]:
+        """Get all motor control tags"""
+        return await self.tag_integration.get_motor_tags()
+    
+    async def get_sensor_tags(self) -> Dict[str, Any]:
+        """Get all sensor tags"""
+        return await self.tag_integration.get_sensor_tags()
 
 # JSON-RPC 2.0 MCP Protocol Implementation
 async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Optional[Dict]:
@@ -1424,6 +1569,57 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
                     'equipment_tag': {'type': 'string', 'description': 'Equipment identifier to find connections for'}
                 }
                 required = ['equipment_tag']
+            
+            # Tag Analyzer Tool Parameters
+            elif name == 'index_tag_csv':
+                properties = {
+                    'csv_path': {'type': 'string', 'description': 'Path to Studio 5000 tag CSV export file'},
+                    'force_rebuild': {'type': 'boolean', 'description': 'Force rebuild even if cached (default: false)'}
+                }
+                required = ['csv_path']
+            elif name == 'search_tags':
+                properties = {
+                    'query': {'type': 'string', 'description': 'Natural language search query'},
+                    'category_filter': {'type': 'string', 'description': 'Filter by device category (VFD, Safety, DI, DO, etc.)'},
+                    'chunk_type_filter': {'type': 'string', 'description': 'Filter by chunk type (safety_tag, motor_tag, sensor_tag, etc.)'},
+                    'limit': {'type': 'integer', 'description': 'Maximum results to return (default: 20)'}
+                }
+                required = ['query']
+            elif name == 'find_device':
+                properties = {
+                    'device_description': {'type': 'string', 'description': 'Description of device to find'},
+                    'device_type': {'type': 'string', 'description': 'Optional device type filter'}
+                }
+                required = ['device_description']
+            elif name == 'get_module_tags':
+                properties = {
+                    'rack': {'type': 'integer', 'description': 'Rack number'},
+                    'slot': {'type': 'integer', 'description': 'Slot number'}
+                }
+                required = ['rack', 'slot']
+            elif name == 'find_i_o_point':
+                properties = {
+                    'address_pattern': {'type': 'string', 'description': 'I/O address pattern to search for (optional)'},
+                    'description': {'type': 'string', 'description': 'Description to search for (optional)'}
+                }
+                required = []  # At least one parameter required, handled in logic
+            elif name == 'analyze_i_o_usage':
+                properties = {}
+                required = []
+            elif name == 'find_related_tags':
+                properties = {
+                    'tag_name': {'type': 'string', 'description': 'Tag name to find relationships for'},
+                    'relationship_type': {'type': 'string', 'description': 'Type of relationship (all, functional, physical)'}
+                }
+                required = ['tag_name']
+            elif name == 'get_device_overview':
+                properties = {
+                    'category_filter': {'type': 'string', 'description': 'Optional category filter'}
+                }
+                required = []
+            elif name in ['get_safety_tags', 'get_motor_tags', 'get_sensor_tags']:
+                properties = {}
+                required = []
             
             tools.append({
                 'name': name,

@@ -301,187 +301,209 @@ class L5XSDKMCPIntegration:
                                logic_description: str, program_name: str = "MainProgram",
                                insertion_mode: str = "optimal") -> Dict[str, Any]:
         """
-        Intelligently insert new ladder logic at optimal location
+        Generate ladder logic and provide insertion recommendations (analysis only - no file modification)
         
         Args:
-            acd_path: Path to ACD/L5K file
+            acd_path: Path to ACD/L5K file (for context only)
             routine_name: Target routine name
-            logic_description: Description of logic to generate and insert
+            logic_description: Description of logic to generate
             program_name: Parent program name
             insertion_mode: 'optimal' or 'end'
             
         Returns:
-            Dictionary with insertion results
+            Dictionary with logic generation and insertion recommendations
         """
         try:
-            # SDK opening disabled - too slow and unreliable
-            logger.warning("SDK project opening disabled - using direct L5X analysis instead")
-            # Continue without SDK opening
+            logger.info(f"Generating logic analysis for {routine_name}: {logic_description}")
             
             # Find optimal insertion point if requested
             insertion_point = 0
             confidence = 0.0
             
             if insertion_mode == "optimal":
-                insertion_point, confidence = self.vector_db.find_optimal_insertion_point(
-                    logic_description, routine_name
-                )
+                try:
+                    insertion_point, confidence = self.vector_db.find_optimal_insertion_point(
+                        logic_description, routine_name
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not find optimal insertion point: {e}")
+                    insertion_point = 1  # Default to first rung
+                    confidence = 0.0
             else:
                 # Insert at end - get routine analysis to find last rung
-                routine_analysis = self.vector_db.get_routine_analysis(routine_name)
-                if 'rung_range' in routine_analysis and routine_analysis['rung_range'][1] > 0:
-                    insertion_point = routine_analysis['rung_range'][1] + 1
+                try:
+                    routine_analysis = self.vector_db.get_routine_analysis(routine_name)
+                    if 'rung_range' in routine_analysis and routine_analysis['rung_range'][1] > 0:
+                        insertion_point = routine_analysis['rung_range'][1] + 1
+                    else:
+                        insertion_point = 1
+                except Exception as e:
+                    logger.warning(f"Could not analyze routine structure: {e}")
+                    insertion_point = 1
             
             # Generate ladder logic using AI assistant
             code_assistant = self._get_code_assistant()
             if not code_assistant:
                 return {
                     'success': False,
-                    'error': 'Code generation not available'
+                    'error': 'Code generation not available - AI assistant not loaded'
                 }
             
             generated_logic = code_assistant.generate_ladder_logic(logic_description)
             if not generated_logic or 'ladder_logic' not in generated_logic:
                 return {
                     'success': False,
-                    'error': 'Failed to generate ladder logic'
+                    'error': 'Failed to generate ladder logic - check logic description'
                 }
             
-            # Create L5X fragment with new logic
+            # Create L5X fragment with new logic (for reference)
             logic_text = generated_logic['ladder_logic']
-            l5x_fragment = self.sdk_analyzer.create_rung_l5x_fragment(
-                logic_text, f"Generated: {logic_description}"
-            )
+            l5x_fragment = None
+            try:
+                l5x_fragment = self.sdk_analyzer.create_rung_l5x_fragment(
+                    logic_text, f"Generated: {logic_description}"
+                )
+            except Exception as e:
+                logger.warning(f"Could not create L5X fragment: {e}")
             
-            if not l5x_fragment:
-                return {
-                    'success': False,
-                    'error': 'Failed to create L5X fragment'
-                }
-            
-            # Insert logic using SDK
-            success = await self.sdk_analyzer.insert_ladder_logic_surgically(
-                routine_name, insertion_point, l5x_fragment, program_name
-            )
-            
-            if success:
-                # Save project
-                await self.sdk_analyzer.save_project()
-                
-                return {
-                    'success': True,
-                    'insertion_point': insertion_point,
-                    'confidence': confidence,
-                    'logic_generated': logic_text,
-                    'tags_created': generated_logic.get('tags', []),
-                    'message': f'Logic inserted at rung {insertion_point} in {routine_name}',
+            # Return analysis results (no actual insertion performed)
+            return {
+                'success': True,
+                'insertion_analysis': {
+                    'recommended_position': insertion_point,
+                    'confidence_score': confidence,
+                    'insertion_mode': insertion_mode
+                },
+                'generated_content': {
+                    'logic_text': logic_text,
+                    'tags_referenced': generated_logic.get('tags', []),
+                    'l5x_fragment': l5x_fragment if l5x_fragment else 'Could not generate L5X format'
+                },
+                'target_info': {
+                    'routine_name': routine_name,
+                    'program_name': program_name,
                     'description': logic_description
-                }
-            else:
-                return {
-                    'success': False,
-                    'error': 'Failed to insert logic using SDK'
-                }
+                },
+                'message': f'✅ Logic generated successfully. Recommended insertion at rung {insertion_point} in {routine_name}',
+                'note': 'This is analysis only - no files were modified. Use Studio 5000 to manually insert the generated logic.'
+            }
                 
         except Exception as e:
-            logger.error(f"Error during smart logic insertion: {e}")
+            logger.error(f"Error during smart logic generation: {e}")
             return {
                 'success': False,
-                'error': f'Smart insertion failed: {str(e)}'
+                'error': f'Logic generation failed: {str(e)}'
             }
-        finally:
-            self.sdk_analyzer.close_project()
     
     async def extract_routine_content(self, acd_path: str, routine_name: str,
                                     program_name: str = "MainProgram", 
                                     output_format: str = "summary") -> Dict[str, Any]:
         """
-        Extract specific routine content for analysis
+        Extract specific routine content for analysis using vector database
         
         Args:
-            acd_path: Path to ACD/L5K file
+            acd_path: Path to ACD/L5K file (for context, not opened)
             routine_name: Routine to extract
-            program_name: Parent program name
+            program_name: Parent program name  
             output_format: 'summary', 'full', or 'rungs_only'
             
         Returns:
             Dictionary with extracted content
         """
         try:
-            # SDK opening disabled - too slow and unreliable
-            logger.warning("SDK project opening disabled")
-            if False:  # Always skip SDK opening
-                return {
-                    'success': False,
-                    'error': f'Failed to open project: {acd_path}'
-                }
+            logger.info(f"Extracting routine content for {routine_name} using vector database")
             
-            # Extract routine
-            l5x_path = await self.sdk_analyzer.extract_routine_for_analysis(
-                routine_name, program_name
+            # Search for the specific routine in the vector database
+            routine_query = f"routine {routine_name}"
+            search_results = self.vector_db.search_l5x_content(
+                routine_query, limit=50, 
+                chunk_types=[L5XChunkType.ROUTINE, L5XChunkType.LADDER_RUNG]
             )
             
-            if not l5x_path:
+            # Filter results to exact routine match
+            routine_chunks = []
+            rung_chunks = []
+            
+            for result in search_results:
+                # Check if this is the exact routine we want
+                if (result.location.parent_routine == routine_name or 
+                    result.name == routine_name):
+                    
+                    if result.chunk_type == L5XChunkType.ROUTINE:
+                        routine_chunks.append(result)
+                    elif result.chunk_type == L5XChunkType.LADDER_RUNG:
+                        rung_chunks.append(result)
+            
+            if not routine_chunks and not rung_chunks:
                 return {
                     'success': False,
-                    'error': f'Failed to extract routine {routine_name}'
+                    'error': f'Routine {routine_name} not found in indexed content. Make sure L5X files are indexed first.'
                 }
             
-            # Parse routine content
-            chunks = self.sdk_analyzer.parse_routine_l5x(l5x_path)
+            # Sort rungs by rung number
+            rung_chunks.sort(key=lambda x: x.location.rung_number or 0)
             
             # Format output based on requested format
             if output_format == "summary":
-                routine_chunks = [c for c in chunks if c.chunk_type == L5XChunkType.ROUTINE]
-                rung_chunks = [c for c in chunks if c.chunk_type == L5XChunkType.LADDER_RUNG]
-                
                 return {
                     'success': True,
                     'routine_name': routine_name,
                     'program_name': program_name,
                     'rung_count': len(rung_chunks),
-                    'description': routine_chunks[0].description if routine_chunks else '',
-                    'dependencies': list(set().union(*[c.dependencies for c in chunks])),
-                    'complexity_score': self.vector_db._calculate_complexity_score(chunks)
+                    'description': routine_chunks[0].description if routine_chunks else 'No description available',
+                    'dependencies': list(set().union(*[result.dependencies for result in routine_chunks + rung_chunks if hasattr(result, 'dependencies')])),
+                    'complexity_info': {
+                        'total_rungs': len(rung_chunks),
+                        'has_routine_metadata': len(routine_chunks) > 0
+                    },
+                    'file_location': routine_chunks[0].location.file_path if routine_chunks else (rung_chunks[0].location.file_path if rung_chunks else 'Unknown')
                 }
             
             elif output_format == "rungs_only":
-                rung_chunks = [c for c in chunks if c.chunk_type == L5XChunkType.LADDER_RUNG]
                 rungs = []
                 
-                for chunk in sorted(rung_chunks, key=lambda x: x.location.rung_number or 0):
+                for result in rung_chunks:
                     rungs.append({
-                        'rung_number': chunk.location.rung_number,
-                        'logic': chunk.content,
-                        'comment': chunk.comment,
-                        'dependencies': chunk.dependencies
+                        'rung_number': result.location.rung_number,
+                        'logic': result.content,
+                        'comment': result.description,
+                        'score': result.score,
+                        'file_path': result.location.file_path
                     })
                 
                 return {
                     'success': True,
                     'routine_name': routine_name,
-                    'rungs': rungs
+                    'rungs': rungs,
+                    'total_rungs': len(rungs)
                 }
             
             else:  # full
+                all_chunks = routine_chunks + rung_chunks
+                chunks_data = []
+                
+                for result in all_chunks:
+                    chunks_data.append({
+                        'id': result.chunk_id,
+                        'type': result.chunk_type.value,
+                        'name': result.name,
+                        'content': result.content,
+                        'description': result.description,
+                        'score': result.score,
+                        'location': {
+                            'file_path': result.location.file_path,
+                            'xpath': result.location.xpath,
+                            'routine': result.location.parent_routine,
+                            'program': result.location.parent_program,
+                            'rung_number': result.location.rung_number
+                        }
+                    })
+                
                 return {
                     'success': True,
                     'routine_name': routine_name,
-                    'chunks': [
-                        {
-                            'id': chunk.id,
-                            'type': chunk.chunk_type.value,
-                            'name': chunk.name,
-                            'content': chunk.content,
-                            'description': chunk.description,
-                            'dependencies': chunk.dependencies,
-                            'location': {
-                                'xpath': chunk.location.xpath,
-                                'rung_number': chunk.location.rung_number
-                            }
-                        }
-                        for chunk in chunks
-                    ]
+                    'chunks': chunks_data,
+                    'total_chunks': len(chunks_data)
                 }
                 
         except Exception as e:
@@ -490,8 +512,6 @@ class L5XSDKMCPIntegration:
                 'success': False,
                 'error': f'Extraction failed: {str(e)}'
             }
-        finally:
-            self.sdk_analyzer.close_project()
     
     async def analyze_routine_structure(self, routine_name: str) -> Dict[str, Any]:
         """
@@ -598,45 +618,81 @@ class L5XSDKMCPIntegration:
     
     async def get_project_overview(self, acd_path: str) -> Dict[str, Any]:
         """
-        Get comprehensive overview of project structure
+        Get project overview from indexed vector database content
         
         Args:
-            acd_path: Path to ACD/L5K file
+            acd_path: Path to ACD/L5K file (for context only)
             
         Returns:
-            Dictionary with project overview
+            Dictionary with project overview from indexed data
         """
         try:
-            # SDK opening disabled - too slow and unreliable
-            logger.warning("SDK project opening disabled")
-            if False:  # Always skip SDK opening
-                return {
-                    'success': False,
-                    'error': f'Failed to open project: {acd_path}'
-                }
+            logger.info(f"Getting project overview from vector database for {acd_path}")
             
-            structure = await self.sdk_analyzer.discover_project_structure()
+            # Get overview from vector database indexed projects
+            project_name = Path(acd_path).stem
+            indexed_projects = self.vector_db.indexed_projects
+            
+            # Check if we have data for this project
+            if project_name not in indexed_projects:
+                # Try to find any indexed project data
+                if not indexed_projects:
+                    return {
+                        'success': False,
+                        'error': 'No L5X data indexed. Use index_exported_l5x_files first to analyze project structure.'
+                    }
+                
+                # Use first available indexed project if exact match not found
+                project_name = list(indexed_projects.keys())[0]
+                logger.info(f"Using indexed project data from: {project_name}")
+            
+            project_stats = indexed_projects[project_name]
+            
+            # Get all chunks to analyze structure
+            all_chunks = []
+            try:
+                # Search for all content to get structure overview
+                structure_results = self.vector_db.search_l5x_content(
+                    "routine program tag", limit=1000  # Get lots of results for overview
+                )
+                all_chunks = structure_results
+            except Exception as e:
+                logger.warning(f"Could not retrieve structure details: {e}")
+            
+            # Analyze the chunks to build overview
+            programs = set()
+            routines = set()
+            udts = set()
+            tags = set()
+            
+            for result in all_chunks:
+                if result.location.parent_program:
+                    programs.add(result.location.parent_program)
+                if result.location.parent_routine:
+                    routines.add(result.location.parent_routine)
+                if result.chunk_type.value == 'udt':
+                    udts.add(result.name)
+                # Tags would need additional parsing
             
             return {
                 'success': True,
-                'project_path': structure['project_path'],
-                'overview': {
-                    'program_count': len(structure['programs']),
-                    'routine_count': len(structure['routines']),
-                    'udt_count': len(structure['udts']),
-                    'tag_count': len(structure['tags']),
-                    'module_count': len(structure['modules'])
+                'project_path': acd_path,
+                'project_name': project_name,
+                'indexing_stats': {
+                    'files_indexed': project_stats.get('file_count', 0),
+                    'chunks_created': project_stats.get('chunk_count', 0),
+                    'last_indexed': project_stats.get('last_indexed', 'Unknown')
                 },
-                'programs': structure['programs'],
-                'routines': [
-                    {
-                        'name': r['name'],
-                        'type': r['type'],
-                        'program': r['program']
-                    }
-                    for r in structure['routines']
-                ],
-                'udts': structure['udts']
+                'overview': {
+                    'program_count': len(programs),
+                    'routine_count': len(routines),
+                    'udt_count': len(udts),
+                    'total_chunks': len(all_chunks)
+                },
+                'programs': list(programs),
+                'routines': list(routines),
+                'udts': list(udts),
+                'note': 'Overview generated from indexed L5X data. Results may vary based on what L5X files were exported and indexed.'
             }
             
         except Exception as e:
@@ -645,8 +701,6 @@ class L5XSDKMCPIntegration:
                 'success': False,
                 'error': f'Failed to get project overview: {str(e)}'
             }
-        finally:
-            self.sdk_analyzer.close_project()
     
     def get_available_tools(self) -> Dict[str, str]:
         """Get list of available MCP tools"""
