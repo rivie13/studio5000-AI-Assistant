@@ -201,9 +201,9 @@ class L5XSDKMCPIntegration:
                         'error': f'Invalid component type: {component_type}'
                     }
             
-            # Perform search
+            # Perform search with lower threshold for broader results
             results = self.vector_db.search_l5x_content(
-                query, limit, chunk_types=chunk_types
+                query, limit, score_threshold=0.05, chunk_types=chunk_types
             )
             
             # Filter by file if requested
