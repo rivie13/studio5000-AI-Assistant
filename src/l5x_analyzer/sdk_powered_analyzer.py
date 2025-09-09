@@ -53,34 +53,22 @@ class SDKPoweredL5XAnalyzer:
     
     async def open_project(self, project_path: str) -> bool:
         """
-        Open ACD/L5K project using Studio 5000 SDK
+        DISABLED: SDK project opening is too slow and unreliable
         
         Args:
             project_path: Path to ACD or L5K file
             
         Returns:
-            True if project opened successfully
+            False - SDK opening disabled
         """
-        if not self.sdk_available:
-            logger.error("Cannot open project - SDK not available")
-            return False
+        logger.warning("SDK project opening is DISABLED - too slow and unreliable")
+        logger.info(f"Skipping SDK open for: {project_path}")
         
-        try:
-            from logix_designer_sdk import LogixProject, StdOutEventLogger
-            
-            logger.info(f"Opening project: {project_path}")
-            self.sdk_project = await LogixProject.open_logix_project(
-                project_path, StdOutEventLogger()
-            )
-            self.project_path = project_path
-            self.is_project_open = True
-            
-            logger.info(f"Project opened successfully: {Path(project_path).name}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to open project {project_path}: {e}")
-            return False
+        # Just mark as "opened" for compatibility but don't actually use SDK
+        self.project_path = project_path
+        self.is_project_open = False  # Keep as False since we're not really opening
+        
+        return False  # Always return False to indicate SDK not used
     
     def close_project(self):
         """Close the currently open project"""

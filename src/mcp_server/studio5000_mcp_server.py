@@ -493,6 +493,12 @@ class Studio5000MCPServer:
         
         # Add L5X analyzer tools for production-scale L5X files
         self.server.add_tool(
+            "index_exported_l5x_files", 
+            "Index exported L5X files directly for semantic search",
+            self.index_exported_l5x_files
+        )
+        
+        self.server.add_tool(
             "index_acd_project",
             "Index ACD/L5K project for semantic search of routines and components",
             self.index_acd_project
@@ -1037,8 +1043,24 @@ class Studio5000MCPServer:
     
     # L5X Analyzer Tools for Production-Scale L5X Files
     
-    async def index_acd_project(self, acd_path: str, routines_to_index: Optional[List[str]] = None,
-                              force_rebuild: bool = False) -> Dict[str, Any]:
+    async def index_exported_l5x_files(self, l5x_directory: str, force_rebuild: bool = False) -> Dict[str, Any]:
+        """Index exported L5X files directly for semantic search"""
+        try:
+            if not hasattr(self, 'l5x_integration') or self.l5x_integration is None:
+                await self._ensure_l5x_tools_initialized()
+            
+            result = self.l5x_integration.index_exported_l5x_files(l5x_directory, force_rebuild)
+            return result
+        
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to index exported L5X files'
+            }
+
+    async def index_acd_project(self, acd_path: str, routines_to_index: Optional[List[str]] = None, 
+                               force_rebuild: bool = False) -> Dict[str, Any]:
         """Index ACD/L5K project for semantic search"""
         return await self.l5x_integration.index_acd_project(
             acd_path, routines_to_index, force_rebuild
@@ -1238,7 +1260,13 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
             elif name == 'get_sdk_statistics':
                 properties = {}
                 required = []
-            # L5X Analyzer Tools
+            # L5X Analyzer Tools  
+            elif name == 'index_exported_l5x_files':
+                properties = {
+                    'l5x_directory': {'type': 'string', 'description': 'Directory containing exported L5X files'},
+                    'force_rebuild': {'type': 'boolean', 'description': 'Force rebuild even if cached (default: false)'}
+                }
+                required = ['l5x_directory']
             elif name == 'index_acd_project':
                 properties = {
                     'acd_path': {'type': 'string', 'description': 'Path to ACD or L5K file to index'},

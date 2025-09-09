@@ -65,14 +65,14 @@ class Studio5000SDKInterface:
             print(f"Creating EMPTY .ACD project: {save_path}", file=sys.stderr)
             print(f"Controller: {controller_type}, Revision: {major_revision}", file=sys.stderr)
             
-            # Create the project using Studio 5000 SDK - EMPTY PROJECT ONLY
-            project = await LogixProject.create_new_project(
-                save_path,
-                major_revision,
-                controller_type,
-                project_name,
-                StdOutEventLogger(),
-            )
+            # REMOVED: SDK create_new_project is too slow and unreliable
+            print("SDK create_new_project DISABLED - too slow", file=sys.stderr)
+            
+            return {
+                'success': False,
+                'error': 'SDK project creation disabled - too slow and unreliable',
+                'message': 'Use L5X generator instead of SDK project creation'
+            }
             
             # DON'T ADD ANYTHING - JUST CLOSE THE PROJECT
             # This creates a clean, empty Studio 5000 project
@@ -130,24 +130,23 @@ class Studio5000SDKInterface:
             print(f"Creating ACD project WITH programs: {save_path}", file=sys.stderr)
             print(f"Controller: {controller_type}, Revision: {major_revision}", file=sys.stderr)
             
-            # Step 1: Create empty project and save it
-            print("Step 1: Creating empty project...", file=sys.stderr)
-            project = await LogixProject.create_new_project(
-                save_path,
-                major_revision,
-                controller_type,
-                project_name,
-                StdOutEventLogger(),
-            )
+            # REMOVED: SDK create_new_project is too slow and unreliable
+            print("Step 1: SDK create_new_project DISABLED - too slow", file=sys.stderr)
+            
+            return {
+                'success': False,
+                'error': 'SDK project creation disabled - too slow and unreliable', 
+                'message': 'Use L5X generator instead of SDK project creation'
+            }
             
             # Save the empty project first to establish the structure
             print("Step 2: Saving empty project...", file=sys.stderr)
             # Close the project to save it properly
             project = None  # This should trigger the save
             
-            # Step 3: Reopen the project for import
-            print("Step 3: Reopening project for import...", file=sys.stderr)
-            project = await LogixProject.open_logix_project(save_path, StdOutEventLogger())
+            # REMOVED: SDK project opening is too slow and unreliable
+            print("Step 3: SDK opening DISABLED - too slow", file=sys.stderr)
+            # Skip the slow SDK opening step
             
             # Step 4: Generate proper L5X content for MainProgram and MainTask
             if ladder_logic:

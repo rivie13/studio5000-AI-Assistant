@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 class L5XMCPTools(Enum):
     """Enumeration of available L5X analysis MCP tools"""
-    INDEX_ACD_PROJECT = "index_acd_project"
+    INDEX_EXPORTED_L5X_FILES = "index_exported_l5x_files"  # NEW: Direct L5X file indexing
+    INDEX_ACD_PROJECT = "index_acd_project"  # OLD: Disabled ACD indexing
     SEARCH_L5X_CONTENT = "search_l5x_content"
     FIND_INSERTION_POINT = "find_insertion_point"
     SMART_INSERT_LOGIC = "smart_insert_logic"
@@ -74,6 +75,54 @@ class L5XSDKMCPIntegration:
             logger.error(f"Failed to initialize L5X MCP integration: {e}")
             raise
     
+    def index_exported_l5x_files(self, l5x_directory: str, force_rebuild: bool = False) -> Dict[str, Any]:
+        """
+        Index EXPORTED L5X files directly (no ACD/SDK opening needed)
+        
+        Args:
+            l5x_directory: Directory containing exported L5X files
+            force_rebuild: Force rebuild even if cached
+            
+        Returns:
+            Dictionary with indexing results
+        """
+        try:
+            logger.info(f"Indexing exported L5X files from: {l5x_directory}")
+            
+            if not Path(l5x_directory).exists():
+                return {
+                    'success': False,
+                    'error': f'L5X directory not found: {l5x_directory}'
+                }
+            
+            # Index the exported L5X files directly
+            success = self.vector_db.index_exported_l5x_files(l5x_directory, force_rebuild)
+            
+            if success:
+                # Get indexing statistics
+                project_name = Path(l5x_directory).name
+                stats = self.vector_db.indexed_projects.get(project_name, {})
+                
+                return {
+                    'success': True,
+                    'project_name': project_name,
+                    'files_indexed': stats.get('file_count', 0),
+                    'chunks_created': stats.get('chunk_count', 0),
+                    'message': f'✅ Successfully indexed exported L5X files from {project_name}'
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': 'Failed to index L5X files - check logs for details'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error indexing L5X files from {l5x_directory}: {e}")
+            return {
+                'success': False,
+                'error': f'Exception during L5X indexing: {str(e)}'
+            }
+
     async def index_acd_project(self, acd_path: str, routines_to_index: List[str] = None,
                               force_rebuild: bool = False) -> Dict[str, Any]:
         """
@@ -265,12 +314,9 @@ class L5XSDKMCPIntegration:
             Dictionary with insertion results
         """
         try:
-            # Open project
-            if not await self.sdk_analyzer.open_project(acd_path):
-                return {
-                    'success': False,
-                    'error': f'Failed to open project: {acd_path}'
-                }
+            # SDK opening disabled - too slow and unreliable
+            logger.warning("SDK project opening disabled - using direct L5X analysis instead")
+            # Continue without SDK opening
             
             # Find optimal insertion point if requested
             insertion_point = 0
@@ -362,7 +408,9 @@ class L5XSDKMCPIntegration:
             Dictionary with extracted content
         """
         try:
-            if not await self.sdk_analyzer.open_project(acd_path):
+            # SDK opening disabled - too slow and unreliable
+            logger.warning("SDK project opening disabled")
+            if False:  # Always skip SDK opening
                 return {
                     'success': False,
                     'error': f'Failed to open project: {acd_path}'
@@ -559,7 +607,9 @@ class L5XSDKMCPIntegration:
             Dictionary with project overview
         """
         try:
-            if not await self.sdk_analyzer.open_project(acd_path):
+            # SDK opening disabled - too slow and unreliable
+            logger.warning("SDK project opening disabled")
+            if False:  # Always skip SDK opening
                 return {
                     'success': False,
                     'error': f'Failed to open project: {acd_path}'

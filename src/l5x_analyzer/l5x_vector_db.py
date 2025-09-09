@@ -86,6 +86,59 @@ class L5XVectorDatabase:
                 logger.error(f"Failed to load sentence transformer: {e}")
                 self.model = None
     
+    def index_exported_l5x_files(self, l5x_directory: str, force_rebuild: bool = False) -> bool:
+        """
+        Index EXPORTED L5X files directly (no SDK opening required)
+        
+        Args:
+            l5x_directory: Directory containing exported L5X files
+            force_rebuild: Force rebuild even if cached
+            
+        Returns:
+            True if indexing successful
+        """
+        l5x_dir = Path(l5x_directory)
+        if not l5x_dir.exists():
+            logger.error(f"L5X directory not found: {l5x_directory}")
+            return False
+        
+        # Find all L5X files in directory
+        l5x_files = list(l5x_dir.glob("*.L5X")) + list(l5x_dir.glob("*.l5x"))
+        if not l5x_files:
+            logger.error(f"No L5X files found in: {l5x_directory}")
+            return False
+        
+        logger.info(f"Found {len(l5x_files)} L5X files to index")
+        
+        # Initialize SDK analyzer for parsing only (no opening)
+        if not self.sdk_analyzer:
+            self.sdk_analyzer = SDKPoweredL5XAnalyzer()
+        
+        # Parse all L5X files directly
+        all_chunks = []
+        for l5x_file in l5x_files:
+            logger.info(f"Parsing L5X file: {l5x_file.name}")
+            chunks = self.sdk_analyzer.parse_routine_l5x(str(l5x_file))
+            all_chunks.extend(chunks)
+        
+        logger.info(f"Parsed {len(all_chunks)} chunks from {len(l5x_files)} L5X files")
+        
+        # Build vector database from chunks
+        self.build_vector_database(all_chunks, force_rebuild=True)
+        
+        # Update indexing status
+        project_name = l5x_dir.name
+        self.indexed_projects[project_name] = {
+            'path': l5x_directory,
+            'indexed_at': time.time(),
+            'file_count': len(l5x_files),
+            'chunk_count': len(all_chunks)
+        }
+        self._save_metadata()
+        
+        logger.info(f"✅ Successfully indexed {len(l5x_files)} L5X files with {len(all_chunks)} chunks")
+        return True
+
     async def index_acd_project(self, acd_path: str, routines_to_index: List[str] = None,
                               force_rebuild: bool = False) -> bool:
         """
@@ -112,7 +165,9 @@ class L5XVectorDatabase:
                 self.sdk_analyzer = SDKPoweredL5XAnalyzer()
             
             # Open project
-            if not await self.sdk_analyzer.open_project(acd_path):
+            # SDK opening disabled - too slow and unreliable  
+            logger.warning("SDK project opening disabled")
+            if False:  # Always skip SDK opening
                 logger.error(f"Failed to open project: {acd_path}")
                 return False
             
