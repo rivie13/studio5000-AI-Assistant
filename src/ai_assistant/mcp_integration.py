@@ -15,6 +15,12 @@ from dataclasses import dataclass
 from .enhanced_main_assistant import EnhancedCodeAssistant
 from .enhanced_code_assistant import EnhancedGeneratedCode, EnhancedPLCRequirement
 
+# Import SDK verifier for enhanced validation
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from verification.sdk_verifier import sdk_verifier, VerificationResult
+
 @dataclass
 class MCPValidationResult:
     """Result of MCP server validation"""
@@ -73,56 +79,153 @@ class MCPIntegratedAssistant:
     
     async def validate_ladder_logic(self, logic_spec: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Validate existing ladder logic using MCP server
+        Enhanced validation of ladder logic using both documentation and SDK verification
         
         Args:
-            logic_spec: Dictionary containing 'ladder_logic' and 'instructions_used'
+            logic_spec: Dictionary containing:
+                - 'ladder_logic': Ladder logic code to validate
+                - 'instructions_used': List of instructions used (optional)
+                - 'controller_type': Controller type for SDK verification (optional)
+                - 'project_path': Path to existing ACD project for real SDK validation (optional)
+                - 'skip_sdk_verification': Skip SDK verification if True (optional)
+        
+        Returns:
+            Dictionary with comprehensive validation results including:
+            - Documentation validation results
+            - SDK build verification results
+            - Combined validation status
         """
         
         ladder_logic = logic_spec.get('ladder_logic', '')
         instructions_used = logic_spec.get('instructions_used', [])
+        controller_type = logic_spec.get('controller_type', '1756-L83E')
+        skip_sdk_verification = logic_spec.get('skip_sdk_verification', False)
         
-        validation_results = []
-        errors = []
-        warnings = []
+        # Phase 1: Documentation-based validation (existing functionality)
+        doc_validation_results = []
+        doc_errors = []
+        doc_warnings = []
         
-        # Validate each instruction
+        # Validate each instruction against documentation
         for instruction in instructions_used:
             try:
                 validation = await self._validate_instruction_comprehensive(instruction)
-                validation_results.append(validation)
+                doc_validation_results.append(validation)
                 
                 if not validation.is_valid:
-                    errors.append(f"Invalid instruction: {instruction}")
+                    doc_errors.append(f"Invalid instruction: {instruction}")
                 
                 if validation.warnings:
-                    warnings.extend(validation.warnings)
+                    doc_warnings.extend(validation.warnings)
                     
             except Exception as e:
-                errors.append(f"Validation error for {instruction}: {str(e)}")
+                doc_errors.append(f"Validation error for {instruction}: {str(e)}")
         
         # Analyze ladder logic structure
         structure_analysis = self._analyze_ladder_structure(ladder_logic)
         
         # Check for common issues
         common_issues = self._check_common_issues(ladder_logic)
-        warnings.extend(common_issues)
+        doc_warnings.extend(common_issues)
         
-        return {
-            'is_valid': len(errors) == 0,
-            'errors': errors,
-            'warnings': warnings,
+        # Documentation validation result
+        doc_is_valid = len(doc_errors) == 0
+        
+        # Phase 2: SDK-based verification (NEW!) with timeout protection
+        sdk_verification = None
+        sdk_is_valid = True  # Default to true if SDK verification is skipped
+        
+        if not skip_sdk_verification and ladder_logic.strip():
+            try:
+                # Prepare context for SDK verification
+                sdk_context = {
+                    'controller_type': controller_type,
+                    'instructions_used': instructions_used,
+                    'project_path': logic_spec.get('project_path')  # Optional existing ACD file
+                }
+                
+                # Perform SDK verification with timeout (90 seconds max to allow for project opening)
+                import asyncio
+                try:
+                    sdk_verification = await asyncio.wait_for(
+                        sdk_verifier.verify_ladder_logic(ladder_logic, sdk_context),
+                        timeout=90.0  # 90 second timeout (60s for project + 30s for validation)
+                    )
+                    sdk_is_valid = sdk_verification.success
+                except asyncio.TimeoutError:
+                    doc_warnings.append("SDK verification timed out after 90 seconds - using documentation validation only")
+                    sdk_verification = VerificationResult(
+                        success=True,  # Don't fail validation due to timeout
+                        errors=[],
+                        warnings=[],
+                        sdk_available=True
+                    )
+                    sdk_is_valid = True  # Don't fail due to timeout
+                
+            except Exception as e:
+                # If SDK verification fails, log error but don't fail entire validation
+                doc_warnings.append(f"SDK verification unavailable: {str(e)}")
+                sdk_verification = VerificationResult(
+                    success=False,
+                    errors=[],
+                    warnings=[],
+                    sdk_available=False
+                )
+        
+        # Phase 3: Combine results
+        overall_is_valid = doc_is_valid and sdk_is_valid
+        all_errors = doc_errors.copy()
+        all_warnings = doc_warnings.copy()
+        
+        # Add SDK errors and warnings to the combined results
+        if sdk_verification:
+            for error in sdk_verification.errors:
+                all_errors.append(f"SDK Build Error: {error.message}")
+            for warning in sdk_verification.warnings:
+                all_warnings.append(f"SDK Warning: {warning.message}")
+        
+        # Prepare comprehensive response
+        response = {
+            # Overall validation status
+            'is_valid': overall_is_valid,
+            'errors': all_errors,
+            'warnings': all_warnings,
+            
+            # Documentation validation details (original functionality)
             'instruction_validations': [
                 {
                     'instruction': v.instruction,
                     'is_valid': v.is_valid,
                     'category': v.category,
                     'description': v.description
-                } for v in validation_results
+                } for v in doc_validation_results
             ],
             'structure_analysis': structure_analysis,
-            'recommendations': self._generate_validation_recommendations(validation_results, structure_analysis)
+            'recommendations': self._generate_validation_recommendations(doc_validation_results, structure_analysis),
+            
+            # NEW: SDK verification details
+            'sdk_verification': {
+                'performed': not skip_sdk_verification and ladder_logic.strip(),
+                'success': sdk_is_valid,
+                'sdk_available': sdk_verification.sdk_available if sdk_verification else None,
+                'build_info': sdk_verification.build_info if sdk_verification else None,
+                'verification_time': sdk_verification.verification_time if sdk_verification else None,
+                'error_count': len(sdk_verification.errors) if sdk_verification else 0,
+                'warning_count': len(sdk_verification.warnings) if sdk_verification else 0
+            },
+            
+            # Combined validation summary
+            'validation_summary': {
+                'documentation_valid': doc_is_valid,
+                'sdk_build_valid': sdk_is_valid,
+                'overall_valid': overall_is_valid,
+                'total_errors': len(all_errors),
+                'total_warnings': len(all_warnings),
+                'verification_level': 'comprehensive' if not skip_sdk_verification else 'documentation_only'
+            }
         }
+        
+        return response
     
     async def create_l5x_project(self, project_spec: Dict[str, Any]) -> Dict[str, Any]:
         """

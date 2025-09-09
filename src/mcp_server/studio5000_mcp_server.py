@@ -27,6 +27,7 @@ from ai_assistant.mcp_integration import create_mcp_integrated_assistant
 from sdk_interface.studio5000_sdk import studio5000_sdk
 from sdk_documentation.mcp_sdk_integration import SDKMCPIntegration, SDKMCPTools
 from documentation.instruction_mcp_integration import InstructionMCPIntegration, InstructionMCPTools
+from l5x_analyzer.l5x_mcp_integration import L5XSDKMCPIntegration, L5XMCPTools
 
 # MCP imports (we'll implement a simplified version)
 class MCPServer:
@@ -262,6 +263,10 @@ class Studio5000MCPServer:
         self.instruction_integration = InstructionMCPIntegration()
         self.instruction_tools = InstructionMCPTools(self.instruction_integration)
         
+        # Initialize L5X analyzer system for production-scale L5X files
+        self.l5x_integration = L5XSDKMCPIntegration()
+        self.l5x_tools = L5XMCPTools
+        
         # Initialize and index the documentation
         self._initialize()
     
@@ -354,6 +359,33 @@ class Studio5000MCPServer:
             print("Falling back to basic SDK search", file=sys.stderr)
             # Continue without vector database - fallbacks will handle this
         
+        # Initialize L5X analyzer system - lightweight initialization
+        print("Initializing L5X analyzer system...", file=sys.stderr)
+        try:
+            # Use threading for async initialization like the others
+            def run_async_l5x_init():
+                """Run async L5X initialization in a new event loop in a thread"""
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    new_loop.run_until_complete(
+                        self.l5x_integration.initialize(force_rebuild=False)
+                    )
+                finally:
+                    new_loop.close()
+            
+            l5x_init_thread = threading.Thread(target=run_async_l5x_init)
+            l5x_init_thread.start()
+            l5x_init_thread.join()  # Wait for completion
+            
+            print("✅ L5X analyzer system initialized successfully!", file=sys.stderr)
+            
+        except Exception as e:
+            print(f"❌ Failed to initialize L5X analyzer: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            print("L5X analyzer features may be limited", file=sys.stderr)
+        
         # Register tools
         self.server.add_tool(
             "search_instructions",
@@ -405,8 +437,8 @@ class Studio5000MCPServer:
         )
         
         self.server.add_tool(
-            "validate_ladder_logic",
-            "Validate ladder logic using Studio 5000 documentation",
+            "validate_ladder_logic", 
+            "Fast and reliable validation of ladder logic using Studio 5000 documentation",
             self.validate_ladder_logic
         )
         
@@ -457,6 +489,55 @@ class Studio5000MCPServer:
             "get_sdk_statistics",
             "Get SDK documentation statistics and overview",
             self.get_sdk_statistics
+        )
+        
+        # Add L5X analyzer tools for production-scale L5X files
+        self.server.add_tool(
+            "index_acd_project",
+            "Index ACD/L5K project for semantic search of routines and components",
+            self.index_acd_project
+        )
+        
+        self.server.add_tool(
+            "search_l5x_content",
+            "Semantic search within indexed L5X content",
+            self.search_l5x_content
+        )
+        
+        self.server.add_tool(
+            "find_insertion_point",
+            "Find optimal location to insert new ladder logic",
+            self.find_insertion_point
+        )
+        
+        self.server.add_tool(
+            "smart_insert_logic",
+            "Intelligently insert new ladder logic at optimal location using SDK",
+            self.smart_insert_logic
+        )
+        
+        self.server.add_tool(
+            "extract_routine_content",
+            "Extract specific routine content for analysis",
+            self.extract_routine_content
+        )
+        
+        self.server.add_tool(
+            "analyze_routine_structure",
+            "Analyze structure and complexity of an indexed routine",
+            self.analyze_routine_structure
+        )
+        
+        self.server.add_tool(
+            "find_related_components",
+            "Find components related to a given component",
+            self.find_related_components
+        )
+        
+        self.server.add_tool(
+            "get_project_overview",
+            "Get comprehensive overview of project structure",
+            self.get_project_overview
         )
     
     async def search_instructions(self, query: str, category: Optional[str] = None) -> List[Dict]:
@@ -953,6 +1034,60 @@ class Studio5000MCPServer:
                 'error': str(e),
                 'message': 'Failed to get SDK statistics'
             }
+    
+    # L5X Analyzer Tools for Production-Scale L5X Files
+    
+    async def index_acd_project(self, acd_path: str, routines_to_index: Optional[List[str]] = None,
+                              force_rebuild: bool = False) -> Dict[str, Any]:
+        """Index ACD/L5K project for semantic search"""
+        return await self.l5x_integration.index_acd_project(
+            acd_path, routines_to_index, force_rebuild
+        )
+    
+    async def search_l5x_content(self, query: str, file_filter: Optional[str] = None,
+                               component_type: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
+        """Semantic search within indexed L5X content"""
+        return await self.l5x_integration.search_l5x_content(
+            query, file_filter, component_type, limit
+        )
+    
+    async def find_insertion_point(self, new_logic_description: str, target_routine: str,
+                                 target_file: Optional[str] = None) -> Dict[str, Any]:
+        """Find optimal location to insert new ladder logic"""
+        return await self.l5x_integration.find_insertion_point(
+            new_logic_description, target_routine, target_file
+        )
+    
+    async def smart_insert_logic(self, acd_path: str, routine_name: str, 
+                               logic_description: str, program_name: str = "MainProgram",
+                               insertion_mode: str = "optimal") -> Dict[str, Any]:
+        """Intelligently insert new ladder logic at optimal location"""
+        return await self.l5x_integration.smart_insert_logic(
+            acd_path, routine_name, logic_description, program_name, insertion_mode
+        )
+    
+    async def extract_routine_content(self, acd_path: str, routine_name: str,
+                                    program_name: str = "MainProgram", 
+                                    output_format: str = "summary") -> Dict[str, Any]:
+        """Extract specific routine content for analysis"""
+        return await self.l5x_integration.extract_routine_content(
+            acd_path, routine_name, program_name, output_format
+        )
+    
+    async def analyze_routine_structure(self, routine_name: str) -> Dict[str, Any]:
+        """Analyze structure and complexity of an indexed routine"""
+        return await self.l5x_integration.analyze_routine_structure(routine_name)
+    
+    async def find_related_components(self, component_name: str, project_filter: Optional[str] = None,
+                                    relationship_type: str = "usage") -> Dict[str, Any]:
+        """Find components related to a given component"""
+        return await self.l5x_integration.find_related_components(
+            component_name, project_filter, relationship_type
+        )
+    
+    async def get_project_overview(self, acd_path: str) -> Dict[str, Any]:
+        """Get comprehensive overview of project structure"""
+        return await self.l5x_integration.get_project_overview(acd_path)
 
 # JSON-RPC 2.0 MCP Protocol Implementation
 async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Optional[Dict]:
@@ -1047,10 +1182,11 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
                 properties = {
                     'logic_spec': {
                         'type': 'object',
-                        'description': 'Ladder logic specification to validate',
+                        'description': 'Ladder logic specification to validate using fast, reliable validation',
                         'properties': {
-                            'ladder_logic': {'type': 'string', 'description': 'Ladder logic code'},
-                            'instructions_used': {'type': 'array', 'description': 'List of instructions used'}
+                            'ladder_logic': {'type': 'string', 'description': 'Ladder logic code to validate'},
+                            'instructions_used': {'type': 'array', 'description': 'List of instructions used (optional)'},
+                            'controller_type': {'type': 'string', 'description': 'Controller type for validation (optional, default: 1756-L83E)'}
                         }
                     }
                 }
@@ -1102,6 +1238,63 @@ async def handle_mcp_request(server: Studio5000MCPServer, request: Dict) -> Opti
             elif name == 'get_sdk_statistics':
                 properties = {}
                 required = []
+            # L5X Analyzer Tools
+            elif name == 'index_acd_project':
+                properties = {
+                    'acd_path': {'type': 'string', 'description': 'Path to ACD or L5K file to index'},
+                    'routines_to_index': {'type': 'array', 'description': 'Optional list of specific routines to index (null for all)'},
+                    'force_rebuild': {'type': 'boolean', 'description': 'Force rebuild even if cached (default: false)'}
+                }
+                required = ['acd_path']
+            elif name == 'search_l5x_content':
+                properties = {
+                    'query': {'type': 'string', 'description': 'Natural language search query'},
+                    'file_filter': {'type': 'string', 'description': 'Optional filter by project file name'},
+                    'component_type': {'type': 'string', 'description': 'Optional filter by component type (routine, rung, udt, etc.)'},
+                    'limit': {'type': 'integer', 'description': 'Maximum results to return (default: 20)'}
+                }
+                required = ['query']
+            elif name == 'find_insertion_point':
+                properties = {
+                    'new_logic_description': {'type': 'string', 'description': 'Description of logic to insert'},
+                    'target_routine': {'type': 'string', 'description': 'Target routine name'},
+                    'target_file': {'type': 'string', 'description': 'Optional target file filter'}
+                }
+                required = ['new_logic_description', 'target_routine']
+            elif name == 'smart_insert_logic':
+                properties = {
+                    'acd_path': {'type': 'string', 'description': 'Path to ACD/L5K file'},
+                    'routine_name': {'type': 'string', 'description': 'Target routine name'},
+                    'logic_description': {'type': 'string', 'description': 'Natural language description of logic to generate and insert'},
+                    'program_name': {'type': 'string', 'description': 'Parent program name (default: MainProgram)'},
+                    'insertion_mode': {'type': 'string', 'description': 'Insertion mode: optimal or end (default: optimal)'}
+                }
+                required = ['acd_path', 'routine_name', 'logic_description']
+            elif name == 'extract_routine_content':
+                properties = {
+                    'acd_path': {'type': 'string', 'description': 'Path to ACD/L5K file'},
+                    'routine_name': {'type': 'string', 'description': 'Routine to extract'},
+                    'program_name': {'type': 'string', 'description': 'Parent program name (default: MainProgram)'},
+                    'output_format': {'type': 'string', 'description': 'Output format: summary, full, or rungs_only (default: summary)'}
+                }
+                required = ['acd_path', 'routine_name']
+            elif name == 'analyze_routine_structure':
+                properties = {
+                    'routine_name': {'type': 'string', 'description': 'Name of routine to analyze'}
+                }
+                required = ['routine_name']
+            elif name == 'find_related_components':
+                properties = {
+                    'component_name': {'type': 'string', 'description': 'Name of component to find relationships for'},
+                    'project_filter': {'type': 'string', 'description': 'Optional project file filter'},
+                    'relationship_type': {'type': 'string', 'description': 'Type of relationship: usage, dependency, or similar (default: usage)'}
+                }
+                required = ['component_name']
+            elif name == 'get_project_overview':
+                properties = {
+                    'acd_path': {'type': 'string', 'description': 'Path to ACD/L5K file'}
+                }
+                required = ['acd_path']
             
             tools.append({
                 'name': name,
